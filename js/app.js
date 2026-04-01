@@ -362,49 +362,41 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Titania
       return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
     }
 
-    function last7WorkingDaysMetric(rows, metric) {
+    function lastWorkingDaysMetric(rows, metric, workingDayCount = 6) {
       const executedRows = getExecutedRows(rows).filter(r => getOverviewDateKey(r));
       if (!executedRows.length) return 0;
 
-      const latestDate = executedRows
+      const allDates = Array.from(new Set(
+        executedRows
         .map(r => getOverviewDateKey(r))
         .filter(Boolean)
-        .sort()
-        .pop();
+        .filter(isWorkingDay)
+      )).sort();
+
+      const latestDate = allDates[allDates.length - 1];
 
       if (!latestDate) return 0;
 
-      const latest = new Date(`${latestDate}T00:00:00Z`);
-      const utcDay = latest.getUTCDay() || 7;
-      const weekStart = new Date(latest);
-      weekStart.setUTCDate(latest.getUTCDate() - (utcDay - 1));
-
-      const startKey = weekStart.toISOString().slice(0, 10);
+      const selectedDates = allDates.slice(-workingDayCount);
+      const startKey = selectedDates[0];
       const endKey = latestDate;
 
-      let total = 0;
-      const rowsInWeek = executedRows.filter(row => {
+      const rowsInWindow = executedRows.filter(row => {
         const dateKey = getOverviewDateKey(row);
         return dateKey && dateKey >= startKey && dateKey <= endKey;
       });
 
       if (metric === 'piles') {
-        total = rowsInWeek.length;
+        return rowsInWindow.length / selectedDates.length;
       } else if (metric === 'lm') {
-        total = rowsInWeek.reduce((sum, row) => sum + (Number(row.asbuilt_depth) || 0), 0);
+        const total = rowsInWindow.reduce((sum, row) => sum + (Number(row.asbuilt_depth) || 0), 0);
+        return total / selectedDates.length;
       } else if (metric === 'm3') {
-        total = rowsInWeek.reduce((sum, row) => sum + (Number(row.asbuilt_concreteQty) || 0), 0);
+        const total = rowsInWindow.reduce((sum, row) => sum + (Number(row.asbuilt_concreteQty) || 0), 0);
+        return total / selectedDates.length;
       }
 
-      let workingDaysElapsed = 0;
-      const cursor = new Date(weekStart);
-      while (cursor.toISOString().slice(0, 10) <= endKey) {
-        const key = cursor.toISOString().slice(0, 10);
-        if (isWorkingDay(key)) workingDaysElapsed += 1;
-        cursor.setUTCDate(cursor.getUTCDate() + 1);
-      }
-
-      return workingDaysElapsed ? total / workingDaysElapsed : 0;
+      return 0;
     }
 
     function addWorkingDays(dateKey, workingDays) {
@@ -431,10 +423,10 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Titania
       const remaining = Math.max(0, total - completed);
       const progress = total ? (completed / total) * 100 : 0;
 
-      const avgPilesRaw = last7WorkingDaysMetric(rows, 'piles');
+      const avgPilesRaw = lastWorkingDaysMetric(rows, 'piles', 6);
       const avgPiles = avgPilesRaw > 0 ? Math.round(avgPilesRaw * 10) / 10 : 0;
 
-      const avgLmRaw = last7WorkingDaysMetric(rows, 'lm');
+      const avgLmRaw = lastWorkingDaysMetric(rows, 'lm', 6);
       const avgLm = avgLmRaw > 0 ? Math.round(avgLmRaw * 10) / 10 : 0;
 
       const yesterdayExecuted = aggregateDailyMetrics(rows, 'piles').find(x => x.date === previousDayKey())?.executedCount || 0;
@@ -1300,7 +1292,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       els.kpiExecuted.textContent = stats.completed.toLocaleString();
       els.kpiRemaining.textContent = stats.remaining.toLocaleString();
       els.kpiRigs.textContent = stats.activeRigs.toLocaleString();
-      els.kpiAvg.textContent = stats.avgPiles ? stats.avgPiles.toLocaleString() + ' pile' : '0 pile';
+      els.kpiAvg.textContent = stats.avgPiles ? stats.avgPiles.toLocaleString() + ' pile/d' : '0 pile/d';
       els.kpiAvgMeta.textContent = stats.avgLm ? stats.avgLm.toLocaleString() + ' Lm' : '0 Lm';
       els.kpiEta.textContent = stats.etaDate ? formatDateLabel(stats.etaDate) : 'â€”';
       els.kpiTotalMetaR.textContent = 'Live';
@@ -2373,34 +2365,36 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const lmSvg = els.costLmSvg;
       if (lmSvg) {
         while (lmSvg.firstChild) lmSvg.removeChild(lmSvg.firstChild);
-        const chartH = 320;
-        const chartW = 1000;
+        const chartH = 220;
+        const chartW = 620;
+        lmSvg.setAttribute('viewBox', `0 0 ${chartW} ${chartH}`);
         const stepX = chartW / (weeks.length + 1);
         const maxLmCost = Math.max(...weeklyData.map(d => d.cplm));
         const maxScaleScaleLmScale = maxLmCost > 0 ? maxLmCost * 1.2 : 1;
-        const lmScaleY = (chartH - 60) / maxScaleScaleLmScale;
+        const lmScaleY = (chartH - 72) / maxScaleScaleLmScale;
         let pathD = '';
         
         weeklyData.forEach((wd, i) => {
           const x = stepX * (i + 1);
-          const y = chartH - 30 - (wd.cplm * lmScaleY);
+          const y = chartH - 52 - (wd.cplm * lmScaleY);
           
           pathD += `${i === 0 ? 'M' : 'L'} ${x} ${y} `;
           
           const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
           dot.setAttribute('cx', x);
           dot.setAttribute('cy', y);
-          dot.setAttribute('r', '5');
+          dot.setAttribute('r', '4.5');
           dot.setAttribute('fill', '#f4f7fb');
           dot.setAttribute('class', 'point-dot');
           dot.style.opacity = forceAnimate ? '0' : '1';
           
           const valL = document.createElementNS('http://www.w3.org/2000/svg', 'text');
           valL.setAttribute('x', x);
-          valL.setAttribute('y', y - 16);
+          valL.setAttribute('y', y - 12);
           valL.setAttribute('class', 'point-label');
-          valL.setAttribute('font-size', '15px');
+          valL.setAttribute('font-size', '16px');
           valL.setAttribute('font-weight', '900');
+          valL.setAttribute('fill', '#f4f7fb');
           valL.style.opacity = forceAnimate ? '0' : '1';
           valL.textContent = wd.cplm > 0 ? wd.cplm.toFixed(1) : '—';
           valL.setAttribute('text-anchor', 'middle');
@@ -2419,10 +2413,11 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           
           const xLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
           xLabel.setAttribute('x', x);
-          xLabel.setAttribute('y', chartH - 10);
+          xLabel.setAttribute('y', chartH - 14);
           xLabel.setAttribute('class', 'axis-label');
-          xLabel.setAttribute('font-size', '14.5px');
+          xLabel.setAttribute('font-size', '15px');
           xLabel.setAttribute('font-weight', '700');
+          xLabel.setAttribute('fill', 'rgba(244,247,251,0.92)');
           xLabel.setAttribute('text-anchor', 'middle');
           xLabel.textContent = `Week ${wd.w}`;
           lmSvg.appendChild(xLabel);

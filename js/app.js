@@ -900,6 +900,9 @@
           let isDown = false;
           let startX = 0;
           let startScrollLeft = 0;
+          wrap.addEventListener('click', evt => {
+            if (!evt.target.closest('.hover-target')) hideTooltip();
+          });
           wrap.addEventListener('pointerdown', evt => {
             if ((wrap.scrollWidth - wrap.clientWidth) <= 4) return;
             isDown = true;
@@ -1208,7 +1211,9 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           let isDown = false;
           let startX = 0;
           let startScrollLeft = 0;
-
+          wrap.addEventListener('click', evt => {
+            if (!evt.target.closest('.hover-target')) hideTooltip();
+          });
           wrap.addEventListener('pointerdown', evt => {
             if ((wrap.scrollWidth - wrap.clientWidth) <= 4) return;
             isDown = true;
@@ -1293,6 +1298,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       els.chartTooltip.style.position = '';
       els.chartTooltip.style.left = '';
       els.chartTooltip.style.top = '';
+      els.chartTooltip.innerHTML = '';
       if (chartHoverGuide) chartHoverGuide.style.display = 'none';
     }
 

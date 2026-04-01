@@ -1872,7 +1872,7 @@
   }
 
   .hero-stage {
-    grid-template-columns: minmax(0, 1.45fr) 240px;
+    grid-template-columns: minmax(0, 1.4fr) 270px;
     gap: 8px;
   }
 
@@ -2011,11 +2011,12 @@
   }
 
   .cost-layout {
-    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    grid-template-columns: minmax(0, 1.2fr) minmax(250px, 0.8fr);
     gap: 8px;
   }
 
   #pageMap,
+  #pageMap.active,
   .map-page-shell,
   .map-frame-wrap,
   .map-frame {

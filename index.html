@@ -376,11 +376,18 @@
   <script src="js/app.js"></script>
   <script>
     const isLocalPreviewHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    let hasReloadedForSwUpdate = false;
 
     async function clearLocalPreviewCaches() {
       if (!('caches' in window)) return;
       const cacheNames = await caches.keys();
       await Promise.all(cacheNames.map(name => caches.delete(name)));
+    }
+
+    function activateWaitingServiceWorker(registration) {
+      if (registration.waiting) {
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
     }
 
     if ('serviceWorker' in navigator) {
@@ -393,8 +400,35 @@
           return;
         }
 
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (hasReloadedForSwUpdate) return;
+          hasReloadedForSwUpdate = true;
+          window.location.reload();
+        });
+
         navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('Service Worker registered', reg))
+          .then(reg => {
+            console.log('Service Worker registered', reg);
+
+            if (reg.waiting) {
+              activateWaitingServiceWorker(reg);
+            }
+
+            reg.addEventListener('updatefound', () => {
+              const newWorker = reg.installing;
+              if (!newWorker) return;
+
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  activateWaitingServiceWorker(reg);
+                }
+              });
+            });
+
+            setInterval(() => {
+              reg.update().catch(err => console.error('SW update check failed:', err));
+            }, 60000);
+          })
           .catch(err => console.error('SW registration failed:', err));
       });
     }

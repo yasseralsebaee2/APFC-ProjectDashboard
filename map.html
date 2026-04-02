@@ -462,8 +462,9 @@
     })();
 
     mapboxgl.accessToken = 'pk.eyJ1IjoieWFzc2VyYWxzZWJhZWUiLCJhIjoiY20zbHdwam12MG9wdzJwczc2aGl0eTRwZCJ9.xZgmTXWHWe73-Ad1jhkmbQ';
-    const JSON_URL = './_titania-map.json_';
-    const TARGET_PROJECT = 'Titania';
+    const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-pile-asbuilt.json_';
+    const DEFAULT_PROJECT = 'Titania';
+    const AUTH_STORAGE_KEY = 'apfcDashboardAuth';
 
     proj4.defs('EPSG:3997', '+proj=tmerc +lat_0=0 +lon_0=55.3333333333333 +k=1 +x_0=500000 +y_0=0 +datum=WGS84 +units=m +no_defs');
 
@@ -484,6 +485,41 @@
     let chartData = [];
     let SITE_CENTER = DEFAULT_SITE_CENTER;
     let pileLayer = null;
+
+    function normalizeText(value) {
+      return String(value || '').trim();
+    }
+
+    function isAllPlotsValue(value) {
+      const normalized = normalizeText(value).toLowerCase();
+      return !normalized || normalized === '-' || normalized === '—' || normalized === 'all' || normalized === 'all plots' || normalized === 'all plot';
+    }
+
+    function getStoredAuthContext() {
+      try {
+        const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function getActiveScope() {
+      const stored = getStoredAuthContext();
+      if (!stored?.project) return null;
+      return {
+        project: normalizeText(stored.project) || DEFAULT_PROJECT,
+        plot: normalizeText(stored.plot)
+      };
+    }
+
+    function matchesScope(row, scope) {
+      const projectMatch = normalizeText(row.project) === normalizeText(scope.project);
+      const plotMatch = isAllPlotsValue(scope.plot) || normalizeText(row.plot) === normalizeText(scope.plot);
+      return projectMatch && plotMatch;
+    }
 
     function parseNumber(value) {
       if (value === undefined || value === null || value === '') return 0;
@@ -1373,11 +1409,14 @@
     }
 
     async function init() {
+      const scope = getActiveScope();
+      if (!scope) throw new Error('Please sign in to load the project map.');
+
       const res = await fetch(JSON_URL, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const rawPiles = Array.isArray(data) ? data : (data.piles || []);
-      allPiles = rawPiles.filter(p => String(p.project || '').trim() === TARGET_PROJECT);
+      allPiles = rawPiles.filter(p => matchesScope(p, scope));
       pileRecords = buildPileRecords(allPiles);
       chartData = aggregateDailyData(allPiles);
       SITE_CENTER = getPileCentroid(pileRecords);
@@ -1422,6 +1461,13 @@
       panelTitle.textContent = 'Load error';
       panelBody.innerHTML = `<div class="panel-section"><div class="panel-section-title">Error</div><div class="info-row"><div class="info-label">Message</div><div class="info-value">${escapeHtml(err.message || String(err))}</div></div></div>`;
       sidePanel.classList.add('open');
+    });
+
+    window.addEventListener('message', event => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'AUTH_CONTEXT_UPDATED') {
+        window.location.reload();
+      }
     });
   </script>
 </body>

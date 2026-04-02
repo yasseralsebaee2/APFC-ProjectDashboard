@@ -1,9 +1,10 @@
-const CACHE_NAME = 'apfc-dashboard-v5';
+const CACHE_NAME = 'apfc-dashboard-v7';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './js/app.js',
+  './users.json',
   './manifest.json',
   './assets/APFC_Logo.png',
   './assets/binghatti_logo.webp',
@@ -15,9 +16,9 @@ const NETWORK_FIRST_PATHS = new Set([
   '/index.html',
   '/css/style.css',
   '/js/app.js',
+  '/users.json',
   '/map.html',
-  '/manifest.json',
-  '/_titania-map.json_'
+  '/manifest.json'
 ]);
 
 self.addEventListener('install', event => {

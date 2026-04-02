@@ -10,11 +10,34 @@
   <link rel="apple-touch-icon" href="assets/APFC_Logo.png">
   
   <script>
-    window.APP_BUILD_VERSION = '20260401-1535';
+    window.APP_BUILD_VERSION = '20260402-1108';
   </script>
-  <link rel="stylesheet" href="css/style.css?v=20260401-1535" />
+  <link rel="stylesheet" href="css/style.css?v=20260402-1108" />
 </head>
 <body>
+  <div class="auth-shell" id="authShell" aria-hidden="true">
+    <div class="auth-card">
+      <div class="auth-brand-row">
+        <img class="auth-brand auth-brand-apfc" src="assets/APFC_Logo.png" alt="APFC logo" />
+        <img class="auth-brand auth-brand-binghatti" src="assets/binghatti_logo.webp" alt="Binghatti logo" />
+      </div>
+      <div class="auth-eyebrow">APFC Project Dashboard</div>
+      <h1 class="auth-title">Sign In</h1>
+      <form class="auth-form" id="authForm">
+        <label class="auth-field">
+          <span>Username or Email</span>
+          <input id="authLoginInput" type="text" autocomplete="username" placeholder="name or name@company.com" />
+        </label>
+        <label class="auth-field">
+          <span>Password</span>
+          <input id="authPasswordInput" type="password" autocomplete="current-password" placeholder="Enter password" />
+        </label>
+        <button class="auth-submit" id="authSubmitBtn" type="submit">Sign In</button>
+        <div class="auth-note">&copy; All rights reserved APFC, BINGHATTI</div>
+        <div class="auth-error" id="authError" role="alert"></div>
+      </form>
+    </div>
+  </div>
   <div class="app">
     <aside class="sidebar">
       <div class="brand brand-apfc"><img src="assets/APFC_Logo.png" alt="APFC logo" /></div>
@@ -33,17 +56,19 @@
         <div class="title-block">
           <div class="page-title">Project Dashboard</div>
           <div class="page-subtitle" id="pageSubtitle">Project Titania</div>
-          <div class="build-stamp">Published 01 Apr 2026 15:55 GST</div>
+          <div class="build-stamp">App V2.0</div>
         </div>
       </div>
       <div class="top-actions">
+        <div class="chip" id="userContextChip" hidden>Signed out</div>
         <div class="chip" id="dataSourceChip">Live Data Source</div>
         <div class="mode-toggle" id="overviewDateModeToggle">
           <button class="active" data-mode="shift" type="button">Shift 7–6:59</button>
           <button data-mode="calendar" type="button">Calendar</button>
         </div>
         <button class="action-btn" id="refreshDashboardBtn" type="button">Refresh Dashboard</button>
-        <button class="action-btn primary" type="button">Titania</button>
+        <button class="action-btn primary" id="projectScopeBtn" type="button">Titania</button>
+        <button class="action-btn" id="signOutBtn" type="button" hidden>Sign Out</button>
       </div>
     </header>
 
@@ -377,11 +402,11 @@
 
   
 </body>
-  <script src="js/app.js?v=20260401-1535"></script>
+  <script src="js/app.js?v=20260402-1108"></script>
   <script>
     const isLocalPreviewHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
     let hasReloadedForSwUpdate = false;
-    const APP_BUILD_VERSION = window.APP_BUILD_VERSION || '20260401-1535';
+    const APP_BUILD_VERSION = window.APP_BUILD_VERSION || '20260402-1108';
 
     async function clearLocalPreviewCaches() {
       if (!('caches' in window)) return;

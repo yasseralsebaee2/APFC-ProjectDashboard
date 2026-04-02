@@ -1,7 +1,18 @@
-﻿const JSON_URL = './_titania-map.json_';
+const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-pile-asbuilt.json_';
+    const USERS_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-users.json_';
     const DEFAULT_PROJECT = 'Titania';
+    const AUTH_STORAGE_KEY = 'apfcDashboardAuth';
 
     const els = {
+      authShell: document.getElementById('authShell'),
+      authForm: document.getElementById('authForm'),
+      authLoginInput: document.getElementById('authLoginInput'),
+      authPasswordInput: document.getElementById('authPasswordInput'),
+      authSubmitBtn: document.getElementById('authSubmitBtn'),
+      authError: document.getElementById('authError'),
+      userContextChip: document.getElementById('userContextChip'),
+      signOutBtn: document.getElementById('signOutBtn'),
+      projectScopeBtn: document.getElementById('projectScopeBtn'),
       dataSourceChip: document.getElementById('dataSourceChip'),
       overviewDateModeButtons: Array.from(document.querySelectorAll('#overviewDateModeToggle button')),
       refreshDashboardBtn: document.getElementById('refreshDashboardBtn'),
@@ -89,7 +100,10 @@
     };
 
     let rawRows = [];
+    let usersDirectory = [];
+    let currentUser = null;
     let selectedProject = DEFAULT_PROJECT;
+    let selectedPlot = '';
     let chartMode = 'daily'; // daily or cumulative (toggle)
     let chartMetric = 'piles';
     let chartGranularity = 'day';
@@ -117,12 +131,165 @@
       return String(value || '').trim();
     }
 
+    function normalizeLogin(value) {
+      return normalizeText(value).toLowerCase();
+    }
+
+    function isAllPlotsValue(value) {
+      const normalized = normalizeText(value).toLowerCase();
+      return !normalized || normalized === '-' || normalized === '—' || normalized === 'all' || normalized === 'all plots' || normalized === 'all plot';
+    }
+
     function normalizeDateString(value) {
       const raw = String(value || '').trim();
       if (!raw) return '';
       const d = new Date(raw);
       if (Number.isNaN(d.getTime())) return '';
       return d.toISOString().slice(0, 10);
+    }
+
+    function getStoredAuthSession() {
+      try {
+        const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function storeAuthSession(user) {
+      window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+    }
+
+    function clearAuthSession() {
+      window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+
+    function sanitizeUserRecord(record) {
+      return {
+        username: normalizeText(record.username || record.Username || record.userName || record.UserName),
+        password: String(record.password || record.Password || ''),
+        email: normalizeText(record.email || record.Email),
+        type: normalizeText(record.type || record.Type).toLowerCase() || 'user',
+        name: normalizeText(record.username || record.Username || record.email || record.Email),
+        project: normalizeText(record.project || record.Project) || DEFAULT_PROJECT,
+        plot: normalizeText(record.plot || record.Plot)
+      };
+    }
+
+    function extractUserList(data) {
+      if (Array.isArray(data)) return data;
+      if (!data || typeof data !== 'object') return [];
+
+      const directLists = [
+        data.body,
+        data.Body,
+        data.users,
+        data.Users,
+        data.items,
+        data.Items,
+        data.records,
+        data.Records,
+        data.data,
+        data.Data
+      ];
+
+      for (const candidate of directLists) {
+        if (Array.isArray(candidate)) return candidate;
+      }
+
+      const objectValues = Object.values(data);
+      if (objectValues.length && objectValues.every(value => value && typeof value === 'object' && !Array.isArray(value))) {
+        return objectValues;
+      }
+
+      return [];
+    }
+
+    function getScopeLabel() {
+      if (!selectedProject) return 'No Project';
+      if (isAllPlotsValue(selectedPlot)) return selectedProject;
+      return `${selectedProject} / ${selectedPlot}`;
+    }
+
+    function getScopeSubtitle() {
+      if (!selectedProject) return 'Project Dashboard';
+      if (isAllPlotsValue(selectedPlot)) return `Project ${selectedProject}`;
+      return `Project ${selectedProject} • Plot ${selectedPlot}`;
+    }
+
+    function updateUserContextUi() {
+      if (els.pageSubtitle) els.pageSubtitle.textContent = getScopeSubtitle();
+      if (els.projectScopeBtn) els.projectScopeBtn.textContent = getScopeLabel();
+
+      if (els.userContextChip) {
+        if (currentUser) {
+          els.userContextChip.hidden = false;
+          els.userContextChip.textContent = currentUser.username;
+        } else {
+          els.userContextChip.hidden = true;
+          els.userContextChip.textContent = 'Signed out';
+        }
+      }
+
+      if (els.signOutBtn) {
+        els.signOutBtn.hidden = !currentUser;
+      }
+    }
+
+    function setAuthLocked(isLocked, errorMessage = '') {
+      document.body.classList.toggle('auth-locked', isLocked);
+      if (els.authShell) els.authShell.setAttribute('aria-hidden', isLocked ? 'false' : 'true');
+      if (els.authError) els.authError.textContent = errorMessage || '';
+      if (isLocked) {
+        els.dataSourceChip.textContent = 'Sign In Required';
+      }
+    }
+
+    async function loadUsersDirectory() {
+      const res = await fetch(USERS_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Users source HTTP ${res.status}`);
+      const data = await res.json();
+      const list = extractUserList(data);
+      usersDirectory = list.map(sanitizeUserRecord).filter(user => user.username && user.password && user.project);
+      if (!usersDirectory.length) throw new Error('No users found in the APFC users source');
+    }
+
+    function findUserRecord(loginValue) {
+      const normalized = normalizeLogin(loginValue);
+      return usersDirectory.find(user => normalizeLogin(user.username) === normalized || normalizeLogin(user.email) === normalized) || null;
+    }
+
+    function broadcastAuthContext() {
+      if (!els.projectMapFrame?.contentWindow) return;
+      els.projectMapFrame.contentWindow.postMessage({
+        type: 'AUTH_CONTEXT_UPDATED',
+        payload: currentUser ? {
+          project: selectedProject,
+          plot: selectedPlot,
+          type: currentUser.type,
+          name: currentUser.name,
+          username: currentUser.username,
+          email: currentUser.email
+        } : null
+      }, window.location.origin);
+    }
+
+    function applyUserSession(user) {
+      currentUser = user;
+      selectedProject = user?.project || DEFAULT_PROJECT;
+      selectedPlot = user?.plot || '';
+      timelineState.pile = 'all';
+      updateUserContextUi();
+      if (currentUser) {
+        storeAuthSession(currentUser);
+        setAuthLocked(false);
+      } else {
+        clearAuthSession();
+      }
+      broadcastAuthContext();
     }
 
     function formatDateKeyInTimezone(value, timeZone = 'Asia/Dubai') {
@@ -250,8 +417,12 @@
     }
 
     function getRowsForProject(project) {
-      const targetProject = DEFAULT_PROJECT || project;
-      return rawRows.filter(r => normalizeText(r.project) === targetProject);
+      const targetProject = normalizeText(project || selectedProject || DEFAULT_PROJECT);
+      return rawRows.filter(r => {
+        const projectMatch = !targetProject || normalizeText(r.project) === targetProject;
+        const plotMatch = isAllPlotsValue(selectedPlot) || normalizeText(r.plot) === normalizeText(selectedPlot);
+        return projectMatch && plotMatch;
+      });
     }
 
     function metricLabel(metric) {
@@ -529,6 +700,7 @@
     }
 
     function setActivePage(page) {
+      if (!currentUser) return;
       activePage = page;
       els.pageOverview.classList.toggle('active', page === 'overview');
       if (els.pageMap) els.pageMap.classList.toggle('active', page === 'map');
@@ -1345,7 +1517,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const rows = getRowsForProject(project);
       const stats = computeStats(rows);
       const avgBasisLabel = '7CD';
-      els.pageSubtitle.textContent = `Project ${DEFAULT_PROJECT}`;
+      els.pageSubtitle.textContent = getScopeSubtitle();
       els.kpiTotal.textContent = stats.total.toLocaleString();
       els.kpiExecuted.textContent = stats.completed.toLocaleString();
       els.kpiRemaining.textContent = stats.remaining.toLocaleString();
@@ -1371,15 +1543,19 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const data = await res.json();
 
       const sourceRows = Array.isArray(data) ? data : (Array.isArray(data.piles) ? data.piles : []);
-      rawRows = sourceRows.filter(r => normalizeText(r.project) === DEFAULT_PROJECT);
-      if (!rawRows.length) throw new Error(`No rows found for ${DEFAULT_PROJECT}`);
+      rawRows = sourceRows;
+      if (!rawRows.length) throw new Error('No rows found in project source');
+      if (!currentUser) throw new Error('Sign in required');
 
-      selectedProject = DEFAULT_PROJECT;
       renderDashboard(selectedProject);
       els.dataSourceChip.textContent = 'Live Data Source';
     }
 
     async function refreshDashboardData() {
+      if (!currentUser) {
+        setAuthLocked(true);
+        return;
+      }
       if (els.refreshDashboardBtn) {
         els.refreshDashboardBtn.disabled = true;
         els.refreshDashboardBtn.textContent = 'Refreshing...';
@@ -2521,9 +2697,93 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       }
     }
 
+    async function signInWithDirectory(loginValue, passwordValue) {
+      const matchedUser = findUserRecord(loginValue);
+      if (!matchedUser) {
+        throw new Error('User not found in the APFC users source');
+      }
+      if (passwordValue !== matchedUser.password) {
+        throw new Error('Incorrect password');
+      }
+      return matchedUser;
+    }
+
+    function resetDashboardSessionUi() {
+      currentUser = null;
+      selectedProject = DEFAULT_PROJECT;
+      selectedPlot = '';
+      updateUserContextUi();
+      setAuthLocked(true);
+    }
+
+    async function submitSignIn() {
+      const loginValue = normalizeText(els.authLoginInput?.value);
+      const passwordValue = els.authPasswordInput?.value || '';
+      if (!loginValue) {
+        setAuthLocked(true, 'Enter your username or email.');
+        els.authLoginInput?.focus();
+        return;
+      }
+      if (!passwordValue) {
+        setAuthLocked(true, 'Enter the temporary password.');
+        els.authPasswordInput?.focus();
+        return;
+      }
+
+      if (els.authSubmitBtn) {
+        els.authSubmitBtn.disabled = true;
+        els.authSubmitBtn.textContent = 'Signing In...';
+      }
+
+      try {
+        const user = await signInWithDirectory(loginValue, passwordValue);
+        applyUserSession(user);
+        await loadDashboardData();
+        updateTimelinePileList(selectedProject);
+        syncTimelinePresetButtons();
+        renderTimelinePage(selectedProject);
+      } catch (err) {
+        console.error(err);
+        setAuthLocked(true, err.message || 'Unable to sign in.');
+      } finally {
+        if (els.authSubmitBtn) {
+          els.authSubmitBtn.disabled = false;
+          els.authSubmitBtn.textContent = 'Sign In';
+        }
+      }
+    }
+
+    async function restoreExistingSession() {
+      const stored = getStoredAuthSession();
+      if (!stored) {
+        resetDashboardSessionUi();
+        return false;
+      }
+
+      const matchedUser = usersDirectory.find(user => (
+        normalizeLogin(user.username) === normalizeLogin(stored.username) &&
+        normalizeText(user.project) === normalizeText(stored.project) &&
+        normalizeText(user.plot) === normalizeText(stored.plot)
+      ));
+
+      if (!matchedUser) {
+        resetDashboardSessionUi();
+        setAuthLocked(true, 'Your saved session is no longer valid. Sign in again.');
+        return false;
+      }
+
+      applyUserSession(matchedUser);
+      return true;
+    }
+
     async function initDashboard() {
       try {
-        await loadDashboardData();
+        await loadUsersDirectory();
+        const hasSession = await restoreExistingSession();
+
+        if (hasSession) {
+          await loadDashboardData();
+        }
 
         if (els.projectSelector) {
           els.projectSelector.addEventListener('change', e => {
@@ -2538,6 +2798,22 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         if (els.refreshDashboardBtn) {
           els.refreshDashboardBtn.addEventListener('click', refreshDashboardData);
         }
+
+        els.authForm?.addEventListener('submit', evt => {
+          evt.preventDefault();
+          submitSignIn();
+        });
+
+        els.signOutBtn?.addEventListener('click', () => {
+          applyUserSession(null);
+          setAuthLocked(true);
+          broadcastAuthContext();
+          if (els.authPasswordInput) els.authPasswordInput.value = '';
+          if (els.authLoginInput) {
+            els.authLoginInput.value = '';
+            els.authLoginInput.focus();
+          }
+        });
 
         els.overviewDateModeButtons.forEach(btn => btn.addEventListener('click', () => {
           overviewDateMode = btn.dataset.mode;
@@ -2575,8 +2851,10 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           renderProductionMetricChart(selectedProject, key, true);
         }));
 
-        updateTimelinePileList(selectedProject);
-        syncTimelinePresetButtons();
+        if (hasSession) {
+          updateTimelinePileList(selectedProject);
+          syncTimelinePresetButtons();
+        }
 
         els.timelineApplyBtn?.addEventListener('click', () => {
           timelineState.start = els.timelineStartDate.value || '';
@@ -2617,9 +2895,18 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
         document.addEventListener('pointerdown', hideChartTooltipsOnOutsideInteraction);
         document.addEventListener('scroll', hideTooltip, true);
-        window.addEventListener('resize', () => renderDashboard(selectedProject));
+        window.addEventListener('resize', () => {
+          if (!currentUser) return;
+          renderDashboard(selectedProject);
+        });
+
+        if (!hasSession) {
+          setAuthLocked(true);
+          els.authLoginInput?.focus();
+        }
       } catch (err) {
         console.error(err);
+        setAuthLocked(true, err.message || 'Unable to initialize sign in.');
         els.dataSourceChip.textContent = 'Source Error';
       }
     }

@@ -508,10 +508,10 @@
 
     function getActiveScope() {
       const stored = getStoredAuthContext();
-      if (!stored?.project) return null;
+      if (!stored?.project && !stored?.selectedProject) return null;
       return {
-        project: normalizeText(stored.project) || DEFAULT_PROJECT,
-        plot: normalizeText(stored.plot)
+        project: normalizeText(stored.selectedProject || stored.project) || DEFAULT_PROJECT,
+        plot: normalizeText(stored.selectedPlot || stored.plot)
       };
     }
 

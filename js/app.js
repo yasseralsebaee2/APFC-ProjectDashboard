@@ -11,6 +11,7 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       authSubmitBtn: document.getElementById('authSubmitBtn'),
       authError: document.getElementById('authError'),
       signOutBtn: document.getElementById('signOutBtn'),
+      projectSelector: document.getElementById('projectSelector'),
       projectScopeBtn: document.getElementById('projectScopeBtn'),
       dataSourceChip: document.getElementById('dataSourceChip'),
       overviewDateModeButtons: Array.from(document.querySelectorAll('#overviewDateModeToggle button')),
@@ -233,6 +234,18 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       if (els.pageSubtitle) els.pageSubtitle.textContent = getScopeSubtitle();
       if (els.projectScopeBtn) els.projectScopeBtn.textContent = getScopeLabel();
 
+      if (els.projectSelector) {
+        const showProjectSelector = isManagerUser();
+        els.projectSelector.hidden = !showProjectSelector;
+        els.projectSelector.style.display = showProjectSelector ? '' : 'none';
+      }
+
+      if (els.projectScopeBtn) {
+        const showProjectButton = !isManagerUser();
+        els.projectScopeBtn.hidden = !showProjectButton;
+        els.projectScopeBtn.style.display = showProjectButton ? '' : 'none';
+      }
+
       els.navButtons.forEach(btn => {
         const label = btn.querySelector('.nav-label')?.textContent?.trim();
         if (label === 'Cost') {
@@ -290,6 +303,35 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       }, window.location.origin);
     }
 
+    function persistScopedSession() {
+      if (!currentUser) return;
+      storeAuthSession({
+        ...currentUser,
+        selectedProject,
+        selectedPlot
+      });
+    }
+
+    function syncProjectScopeFromData() {
+      if (!rawRows.length) return;
+
+      if (isManagerUser()) {
+        const projects = getProjectList(rawRows).filter(project => normalizeText(project).toLowerCase() !== 'all');
+        if (projects.length) {
+          const currentProjectIsValid = projects.includes(selectedProject);
+          if (!currentProjectIsValid) {
+            selectedProject = projects.includes(DEFAULT_PROJECT) ? DEFAULT_PROJECT : projects[0];
+          }
+          renderProjectOptions(projects);
+        }
+        persistScopedSession();
+        return;
+      }
+
+      selectedProject = currentUser?.project || DEFAULT_PROJECT;
+      persistScopedSession();
+    }
+
     function applyUserSession(user) {
       currentUser = user;
       selectedProject = user?.project || DEFAULT_PROJECT;
@@ -297,7 +339,7 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       timelineState.pile = 'all';
       updateUserContextUi();
       if (currentUser) {
-        storeAuthSession(currentUser);
+        persistScopedSession();
         setAuthLocked(false);
       } else {
         clearAuthSession();
@@ -425,8 +467,10 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
 
     function getProjectList(rows) {
       const projects = Array.from(new Set(rows.map(r => normalizeText(r.project)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-      if (projects.includes(DEFAULT_PROJECT)) return [DEFAULT_PROJECT];
-      return projects.length ? [projects[0]] : [];
+      if (projects.includes(DEFAULT_PROJECT)) {
+        return [DEFAULT_PROJECT, ...projects.filter(project => project !== DEFAULT_PROJECT)];
+      }
+      return projects;
     }
 
     function getRowsForProject(project) {
@@ -1562,6 +1606,9 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       rawRows = sourceRows;
       if (!rawRows.length) throw new Error('No rows found in project source');
       if (!currentUser) throw new Error('Sign in required');
+
+      syncProjectScopeFromData();
+      broadcastAuthContext();
 
       renderDashboard(selectedProject);
       els.dataSourceChip.textContent = 'Live Data Source';
@@ -2803,11 +2850,16 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
         if (els.projectSelector) {
           els.projectSelector.addEventListener('change', e => {
+            if (!isManagerUser()) return;
             selectedProject = e.target.value;
             timelineState.pile = 'all';
             updateTimelinePileList(selectedProject);
             syncTimelinePresetButtons();
             renderDashboard(selectedProject);
+            if (activePage === 'production') renderProductionPage(selectedProject, true);
+            if (activePage === 'timeline') renderTimelinePage(selectedProject, true);
+            if (activePage === 'cost') renderCostPage(selectedProject, true);
+            broadcastAuthContext();
           });
         }
 

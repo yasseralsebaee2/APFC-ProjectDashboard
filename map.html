@@ -1513,6 +1513,14 @@
 
     window.addEventListener('message', event => {
       if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'MAP_FOCUS_ANIMATE') {
+        try {
+          map.resize();
+          const mode = view3DBtn.classList.contains('active') ? '3d' : '2d';
+          setTimeout(() => setMapView(mode, { instant: false }), 40);
+        } catch (err) {}
+        return;
+      }
       if (event.data?.type === 'AUTH_CONTEXT_UPDATED') {
         const payload = event.data?.payload;
         if (payload && typeof payload === 'object') {

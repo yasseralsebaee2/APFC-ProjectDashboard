@@ -325,6 +325,13 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       }, window.location.origin);
     }
 
+    function triggerMapFocusAnimation() {
+      if (!els.projectMapFrame?.contentWindow) return;
+      els.projectMapFrame.contentWindow.postMessage({
+        type: 'MAP_FOCUS_ANIMATE'
+      }, window.location.origin);
+    }
+
     function persistScopedSession() {
       if (!currentUser) return;
       storeAuthSession({
@@ -697,10 +704,24 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       const remaining = Math.max(0, total - completed);
       const progress = total ? (completed / total) * 100 : 0;
 
-      const avgPilesRaw = lastCalendarDaysMetric(rows, 'piles', 7) * (7 / 6);
-      const avgPiles = avgPilesRaw > 0 ? Math.round(avgPilesRaw * 10) / 10 : 0;
+      const executedDates = Array.from(new Set(
+        executedRows
+          .map(r => getOverviewDateKey(r))
+          .filter(Boolean)
+      )).sort();
+      const workedDaysCount = executedDates.length;
 
-      const avgLmRaw = lastCalendarDaysMetric(rows, 'lm', 7) * (7 / 6);
+      let avgPilesRaw = 0;
+      let avgLmRaw = 0;
+      if (workedDaysCount > 0 && workedDaysCount < 6) {
+        const totalLmFromStart = executedRows.reduce((sum, row) => sum + (Number(row.asbuilt_depth) || 0), 0);
+        avgPilesRaw = completed / workedDaysCount;
+        avgLmRaw = totalLmFromStart / workedDaysCount;
+      } else {
+        avgPilesRaw = lastCalendarDaysMetric(rows, 'piles', 7) * (7 / 6);
+        avgLmRaw = lastCalendarDaysMetric(rows, 'lm', 7) * (7 / 6);
+      }
+      const avgPiles = avgPilesRaw > 0 ? Math.round(avgPilesRaw * 10) / 10 : 0;
       const avgLm = avgLmRaw > 0 ? Math.round(avgLmRaw * 10) / 10 : 0;
 
       const yesterdayExecuted = aggregateDailyMetrics(rows, 'piles').find(x => x.date === previousDayKey())?.executedCount || 0;
@@ -812,6 +833,7 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       });
 
       if (page === 'overview') renderDashboard(selectedProject);
+      if (page === 'map') window.setTimeout(triggerMapFocusAnimation, 80);
       if (page === 'production') renderProductionPage(selectedProject, true);
       if (page === 'manpower') renderManpowerPage(selectedProject);
       if (page === 'timeline') renderTimelinePage(selectedProject, true);
@@ -2479,6 +2501,12 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const rigRental = 2500; // Updated rig rate
       const vbRental = 3250; // Updated vibro+powerpack rate
       const craneRental = 1100;
+      const projectKey = normalizeText(project).toLowerCase();
+      const getEquipmentCounts = () => {
+        if (projectKey === 'vintage') return { rig: 1, vb: 0, crane: 0 };
+        return { rig: 1, vb: 1, crane: 1 };
+      };
+      const equipmentCounts = getEquipmentCounts();
 
       const lastDayValues = {
         pm: lastDayCounts.pm * dailyRates.pm,
@@ -2490,9 +2518,9 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         we: lastDayCounts.we * dailyRates.we,
         me: lastDayCounts.me * dailyRates.me,
         hl: lastDayCounts.hl * dailyRates.hl,
-        r_rig: lastDayDateKey ? rigRental : 0,
-        r_vb: lastDayDateKey ? vbRental : 0,
-        r_crane: lastDayDateKey ? craneRental : 0
+        r_rig: lastDayDateKey ? equipmentCounts.rig * rigRental : 0,
+        r_vb: lastDayDateKey ? equipmentCounts.vb * vbRental : 0,
+        r_crane: lastDayDateKey ? equipmentCounts.crane * craneRental : 0
       };
       lastDayValues.salaries = lastDayValues.pm + lastDayValues.se + lastDayValues.foreman + lastDayValues.op + lastDayValues.vb + lastDayValues.rig + lastDayValues.we + lastDayValues.me + lastDayValues.hl;
       lastDayValues.rental = lastDayValues.r_rig + lastDayValues.r_vb + lastDayValues.r_crane;
@@ -2562,9 +2590,9 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
         const salaries = pm + se + foreman + op + vb + rig + we + me + hl;
         
-        const r_rig = 1 * rigRental * getEquipDays(w, 'rig', days);
-        const r_vb = 1 * vbRental * getEquipDays(w, 'vb', days);
-        const r_crane = 1 * craneRental * getEquipDays(w, 'crane', days);
+        const r_rig = equipmentCounts.rig * rigRental * getEquipDays(w, 'rig', days);
+        const r_vb = equipmentCounts.vb * vbRental * getEquipDays(w, 'vb', days);
+        const r_crane = equipmentCounts.crane * craneRental * getEquipDays(w, 'crane', days);
         const rental = r_rig + r_vb + r_crane;
 
         const direct = salaries + rental;
@@ -2605,6 +2633,11 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         return Number(val.toFixed(isLm ? 1 : 2)).toLocaleString('en-US');
       }
 
+      const rentalDetailRows = [];
+      if (equipmentCounts.rig > 0) rentalDetailRows.push({ targetPivot: 'rental', key: 'r_rig', label: 'Piling Rig' });
+      if (equipmentCounts.vb > 0) rentalDetailRows.push({ targetPivot: 'rental', key: 'r_vb', label: 'Vibrator & Power Pack' });
+      if (equipmentCounts.crane > 0) rentalDetailRows.push({ targetPivot: 'rental', key: 'r_crane', label: 'Crawler Crane' });
+
       const tableRows = [
         { key: 'directSection', sectionLabel: 'Direct', sectionRow: true },
         { key: 'salaries', label: 'Personnel Cost', groupSub: true, hasPivot: true },
@@ -2619,9 +2652,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         { targetPivot: 'salaries', key: 'hl', label: 'Helpers' },
 
         { key: 'rental', label: 'Equipment Rental', groupSub: true, hasPivot: true },
-        { targetPivot: 'rental', key: 'r_rig', label: 'Piling Rig' },
-        { targetPivot: 'rental', key: 'r_vb', label: 'Vibrator & Power Pack' },
-        { targetPivot: 'rental', key: 'r_crane', label: 'Crawler Crane' },
+        ...rentalDetailRows,
 
         { key: 'direct', label: '', groupHead: true },
         { key: 'overheadSection', sectionLabel: 'Indirect', sectionRow: true },
@@ -2692,17 +2723,17 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
               count = data[wd.w][row.key];
               rate = dailyRates[row.key];
             } else if (row.key === 'r_rig') {
-              count = 1;
+              count = equipmentCounts.rig;
               rate = rigRental;
-              targetDays = getEquipDays(wd.w, 'rig');
+              targetDays = getEquipDays(wd.w, 'rig', wd.days);
             } else if (row.key === 'r_vb') {
-              count = 1;
+              count = equipmentCounts.vb;
               rate = vbRental;
-              targetDays = getEquipDays(wd.w, 'vb');
+              targetDays = getEquipDays(wd.w, 'vb', wd.days);
             } else if (row.key === 'r_crane') {
-              count = 1;
+              count = equipmentCounts.crane;
               rate = craneRental;
-              targetDays = getEquipDays(wd.w, 'crane');
+              targetDays = getEquipDays(wd.w, 'crane', wd.days);
             }
             if (count > 0) {
               html += `<td class="num cost-detail-cell">
@@ -2723,8 +2754,12 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           let lastDayCount = 0;
           if (row.targetPivot === 'salaries') {
             lastDayCount = Number(lastDayCounts[row.key]) || 0;
-          } else if (row.key === 'r_rig' || row.key === 'r_vb' || row.key === 'r_crane') {
-            lastDayCount = lastDayDateKey ? 1 : 0;
+          } else if (row.key === 'r_rig') {
+            lastDayCount = lastDayDateKey ? equipmentCounts.rig : 0;
+          } else if (row.key === 'r_vb') {
+            lastDayCount = lastDayDateKey ? equipmentCounts.vb : 0;
+          } else if (row.key === 'r_crane') {
+            lastDayCount = lastDayDateKey ? equipmentCounts.crane : 0;
           }
 
           const lastDayValue = Number(lastDayValues[row.key]) || 0;

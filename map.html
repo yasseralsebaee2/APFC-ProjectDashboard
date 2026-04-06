@@ -292,6 +292,7 @@
     }
 
     @media (max-width: 640px) {
+      .progress-card, .chart-card { display: none !important; }
       .header { height: 40px; padding: 0 10px; }
       .header img { height: 20px; margin-right: 8px; }
       .header-title { font-size: 11px; letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -341,6 +342,10 @@
       .pile-label-marker { width: 72px; }
       .pile-label-id { top: -6px; font-size: 9px; }
       .pile-label-type { top: 6px; font-size: 9px; }
+    }
+
+    @media (max-height: 480px) and (orientation: landscape) {
+      .progress-card, .chart-card { display: none !important; }
     }
   </style>
 </head>

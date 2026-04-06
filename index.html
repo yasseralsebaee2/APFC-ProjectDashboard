@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>APFC Dashboard | Project Dashboard</title>
   
   <meta name="theme-color" content="#06080b">
@@ -10,9 +10,9 @@
   <link rel="apple-touch-icon" href="assets/APFC_Logo.png">
   
   <script>
-    window.APP_BUILD_VERSION = '20260406-1200';
+    window.APP_BUILD_VERSION = '20260406-1810';
   </script>
-  <link rel="stylesheet" href="css/style.css?v=20260406-1200" />
+  <link rel="stylesheet" href="css/style.css?v=20260406-1810" />
 </head>
 <body>
   <div class="auth-shell" id="authShell" aria-hidden="true">
@@ -76,7 +76,7 @@
         <div class="title-block">
           <div class="page-title">Project Dashboard</div>
           <div class="page-subtitle" id="pageSubtitle">Project Titania</div>
-          <div class="build-stamp">App V2.7</div>
+          <div class="build-stamp">App V2.10</div>
         </div>
       </div>
       <div class="top-actions">
@@ -475,11 +475,11 @@
 
   
 </body>
-  <script src="js/app.js?v=20260406-1200"></script>
+  <script src="js/app.js?v=20260406-1810"></script>
   <script>
     const isLocalPreviewHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
     let hasReloadedForSwUpdate = false;
-    const APP_BUILD_VERSION = window.APP_BUILD_VERSION || '20260406-1200';
+    const APP_BUILD_VERSION = window.APP_BUILD_VERSION || '20260406-1810';
 
     async function clearLocalPreviewCaches() {
       if (!('caches' in window)) return;

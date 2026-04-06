@@ -1,4 +1,4 @@
-const CACHE_NAME = 'apfc-dashboard-v10';
+const CACHE_NAME = 'apfc-dashboard-v11';
 const ASSETS = [
   './',
   './index.html',

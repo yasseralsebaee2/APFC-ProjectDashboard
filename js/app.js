@@ -1066,7 +1066,7 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       const scrollNeeded = data.length > visibleBars;
       const stepX = scrollNeeded
         ? visibleInnerW / visibleBars
-        : visibleInnerW / Math.max(data.length, 1);
+        : (data.length > 1 ? visibleInnerW / (data.length - 1) : 0);
       const innerW = scrollNeeded ? stepX * data.length : visibleInnerW;
       const svgWidth = left + innerW + right;
       const barW = isPileView
@@ -1096,9 +1096,15 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       const monthRuns = [];
       let currentRun = null;
       const animatedBars = [];
+      const xStart = left + (scrollNeeded ? (stepX / 2) : (barW / 2));
+      const xEnd = left + visibleInnerW - (scrollNeeded ? (stepX / 2) : (barW / 2));
 
       data.forEach((item, idx) => {
-        const x = left + stepX * idx + stepX / 2;
+        const x = data.length <= 1
+          ? left + visibleInnerW / 2
+          : (scrollNeeded
+            ? left + stepX * idx + stepX / 2
+            : xStart + ((xEnd - xStart) / (data.length - 1)) * idx);
         const finalYValue = yScale(item.avg);
         const finalY = Math.min(finalYValue, baselineY);
         const finalH = Math.max(2, Math.abs(finalYValue - baselineY));
@@ -1379,6 +1385,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const plannedData = (chartMode === 'cumulative' && chartMetric === 'piles') ? buildPlannedCurve(rows, data) : [];
       const titleMetric = metricLabel(chartMetric);
       const granularityLabel = chartGranularity === 'day' ? 'Day' : (chartGranularity === 'week' ? 'Week' : 'Month');
+      const useTwoRowMobileDayAxis = window.matchMedia('(max-width: 767px)').matches && chartGranularity === 'day';
       els.chartTitle.textContent = `${chartMode === 'daily' ? 'Daily' : 'Cumulative'} ${titleMetric} by ${granularityLabel}`;
       els.chartTag.textContent = chartMode === 'daily' ? 'Daily' : 'Cumulative';
       clearSvgGroup(els.chartGrid);
@@ -1397,7 +1404,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const left = 58;
       const right = 20;
       const top = 20;
-      const bottom = 56;
+      const bottom = useTwoRowMobileDayAxis ? 74 : 56;
       const innerH = height - top - bottom;
       const visibleInnerW = width - left - right;
       const scrollNeeded = data.length > visiblePoints;
@@ -1437,6 +1444,8 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       }
 
       if (chartMode === 'daily') {
+        const monthRuns = [];
+        let currentRun = null;
         const animatedBars = [];
         data.forEach((d, idx) => {
           const x = left + stepX * idx + stepX / 2;
@@ -1454,10 +1463,38 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           hit.addEventListener('mousemove', evt => showTooltip(evt, d, null, { anchorX: x, anchorY: y }));
           hit.addEventListener('mouseleave', hideTooltip);
           els.chartSeries.appendChild(hit);
-          const xLabel = svgEl('text', { x, y: height - 18, class: 'axis-label', 'text-anchor': 'middle' });
-          xLabel.textContent = formatPeriodLabel(d.date);
-          els.chartXAxis.appendChild(xLabel);
+          if (useTwoRowMobileDayAxis) {
+            const monthText = formatMonthShortLabel(d.date);
+            const dayText = formatDayNumberLabel(d.date);
+            if (!currentRun || currentRun.month !== monthText) {
+              currentRun = { month: monthText, startX: x, endX: x };
+              monthRuns.push(currentRun);
+            } else {
+              currentRun.endX = x;
+            }
+            const dayAxis = svgEl('text', { x, y: height - 18, class: 'axis-label', 'text-anchor': 'middle' });
+            dayAxis.textContent = dayText;
+            els.chartXAxis.appendChild(dayAxis);
+          } else {
+            const xLabel = svgEl('text', { x, y: height - 18, class: 'axis-label', 'text-anchor': 'middle' });
+            xLabel.textContent = formatPeriodLabel(d.date);
+            els.chartXAxis.appendChild(xLabel);
+          }
         });
+
+        if (useTwoRowMobileDayAxis && monthRuns.length) {
+          monthRuns.forEach(run => {
+            const monthAxis = svgEl('text', {
+              x: (run.startX + run.endX) / 2,
+              y: height - 38,
+              class: 'axis-label',
+              'text-anchor': 'middle',
+              style: 'font-size:10px; font-weight:700; letter-spacing:0.25px;'
+            });
+            monthAxis.textContent = run.month;
+            els.chartXAxis.appendChild(monthAxis);
+          });
+        }
 
         const startTime = performance.now();
         const duration = 520;
@@ -1479,6 +1516,8 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         };
         requestAnimationFrame(frame);
       } else {
+        const monthRuns = [];
+        let currentRun = null;
         let path = '';
         let area = `M ${left} ${top + innerH}`;
         let plannedPath = '';
@@ -1503,10 +1542,37 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           hit.addEventListener('mousemove', evt => showTooltip(evt, d, plannedData[idx], { anchorX: x, anchorY: y, showGuide: true }));
           hit.addEventListener('mouseleave', hideTooltip);
           els.chartSeries.appendChild(hit);
-          const xLabel = svgEl('text', { x, y: height - 18, class: 'axis-label', 'text-anchor': 'middle' });
-          xLabel.textContent = formatPeriodLabel(d.date);
-          els.chartXAxis.appendChild(xLabel);
+          if (useTwoRowMobileDayAxis) {
+            const monthText = formatMonthShortLabel(d.date);
+            const dayText = formatDayNumberLabel(d.date);
+            if (!currentRun || currentRun.month !== monthText) {
+              currentRun = { month: monthText, startX: x, endX: x };
+              monthRuns.push(currentRun);
+            } else {
+              currentRun.endX = x;
+            }
+            const dayAxis = svgEl('text', { x, y: height - 18, class: 'axis-label', 'text-anchor': 'middle' });
+            dayAxis.textContent = dayText;
+            els.chartXAxis.appendChild(dayAxis);
+          } else {
+            const xLabel = svgEl('text', { x, y: height - 18, class: 'axis-label', 'text-anchor': 'middle' });
+            xLabel.textContent = formatPeriodLabel(d.date);
+            els.chartXAxis.appendChild(xLabel);
+          }
         });
+        if (useTwoRowMobileDayAxis && monthRuns.length) {
+          monthRuns.forEach(run => {
+            const monthAxis = svgEl('text', {
+              x: (run.startX + run.endX) / 2,
+              y: height - 38,
+              class: 'axis-label',
+              'text-anchor': 'middle',
+              style: 'font-size:10px; font-weight:700; letter-spacing:0.25px;'
+            });
+            monthAxis.textContent = run.month;
+            els.chartXAxis.appendChild(monthAxis);
+          });
+        }
         const lastX = left + stepX * (data.length - 1) + stepX / 2;
         area += ` L ${lastX} ${top + innerH} Z`;
 
@@ -3546,6 +3612,23 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
   const topActions  = document.querySelector('.top-actions');
   const filterBtn   = document.getElementById('timelineFilterToggle');
   const tlSidebar   = document.querySelector('.timeline-sidebar');
+  let drawerOverlay = document.querySelector('.mobile-drawer-overlay');
+
+  if (!drawerOverlay) {
+    drawerOverlay = document.createElement('button');
+    drawerOverlay.type = 'button';
+    drawerOverlay.className = 'mobile-drawer-overlay';
+    drawerOverlay.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(drawerOverlay);
+  }
+
+  function closeMobileActionsMenu() {
+    if (!topActions || !menuBtn) return;
+    topActions.classList.remove('mobile-open');
+    menuBtn.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('mobile-controls-open');
+    drawerOverlay.classList.remove('visible');
+  }
 
   /* -- Hamburger drawer --------------------------------------------------- */
   if (menuBtn && topActions) {
@@ -3553,13 +3636,16 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       e.stopPropagation();
       const isOpen = topActions.classList.toggle('mobile-open');
       menuBtn.setAttribute('aria-expanded', String(isOpen));
+      document.body.classList.toggle('mobile-controls-open', isOpen);
+      drawerOverlay.classList.toggle('visible', isOpen);
     });
+
+    drawerOverlay.addEventListener('click', closeMobileActionsMenu);
 
     /* Close only when tapping completely outside the topbar area */
     document.addEventListener('click', function (e) {
-      if (!e.target.closest('header.topbar')) {
-        topActions.classList.remove('mobile-open');
-        menuBtn.setAttribute('aria-expanded', 'false');
+      if (!e.target.closest('header.topbar') && !e.target.closest('.mobile-drawer-overlay')) {
+        closeMobileActionsMenu();
       }
     });
 
@@ -3571,9 +3657,12 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
                             e.target.closest('.mode-toggle') ||
                             e.target.closest('.mode-switch');
       if (!isInteractive) {
-        topActions.classList.remove('mobile-open');
-        menuBtn.setAttribute('aria-expanded', 'false');
+        closeMobileActionsMenu();
       }
+    });
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 900) closeMobileActionsMenu();
     });
   }
 

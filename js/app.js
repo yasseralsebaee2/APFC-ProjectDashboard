@@ -3537,3 +3537,48 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
     initDashboard();
 
+/* ==========================================================================
+   MOBILE UI — hamburger drawer + timeline filter toggle
+   Self-contained; runs after the app initialises.
+   ========================================================================== */
+(function initMobileUI() {
+  const menuBtn     = document.getElementById('mobileActionsBtn');
+  const topActions  = document.querySelector('.top-actions');
+  const filterBtn   = document.getElementById('timelineFilterToggle');
+  const tlSidebar   = document.querySelector('.timeline-sidebar');
+
+  /* -- Hamburger drawer --------------------------------------------------- */
+  if (menuBtn && topActions) {
+    menuBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const isOpen = topActions.classList.toggle('mobile-open');
+      menuBtn.setAttribute('aria-expanded', String(isOpen));
+    });
+
+    /* Close when tapping outside the topbar */
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('header.topbar')) {
+        topActions.classList.remove('mobile-open');
+        menuBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    /* Close when any action inside the drawer is activated */
+    topActions.addEventListener('click', function (e) {
+      if (e.target !== menuBtn) {
+        topActions.classList.remove('mobile-open');
+        menuBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  /* -- Timeline filter toggle --------------------------------------------- */
+  if (filterBtn && tlSidebar) {
+    filterBtn.addEventListener('click', function () {
+      const isOpen = tlSidebar.classList.toggle('mobile-open');
+      filterBtn.textContent = isOpen ? 'Hide Filters' : 'Show Filters';
+      filterBtn.classList.toggle('is-open', isOpen);
+    });
+  }
+})();
+

@@ -10,9 +10,9 @@
   <link rel="apple-touch-icon" href="assets/APFC_Logo.png">
   
   <script>
-    window.APP_BUILD_VERSION = '20260404-1835';
+    window.APP_BUILD_VERSION = '20260406-1000';
   </script>
-  <link rel="stylesheet" href="css/style.css?v=20260404-1835" />
+  <link rel="stylesheet" href="css/style.css?v=20260406-1000" />
 </head>
 <body>
   <div class="auth-shell" id="authShell" aria-hidden="true">
@@ -90,6 +90,11 @@
         <button class="action-btn primary" id="projectScopeBtn" type="button">Titania</button>
         <button class="action-btn" id="signOutBtn" type="button" hidden>Sign Out</button>
       </div>
+      <button class="mobile-menu-btn" id="mobileActionsBtn" type="button" aria-label="Actions menu" aria-expanded="false">
+        <span class="mobile-menu-bar"></span>
+        <span class="mobile-menu-bar"></span>
+        <span class="mobile-menu-bar"></span>
+      </button>
     </header>
 
     <main class="content">
@@ -302,6 +307,7 @@
         
         <section class="page-view" id="pageTimeline">
           <div class="timeline-layout">
+            <button class="timeline-filter-toggle" id="timelineFilterToggle" type="button">Show Filters</button>
             <aside class="timeline-sidebar">
               <div class="filter-panel">
                 <div class="filter-title">Calendar Filter</div>
@@ -469,11 +475,11 @@
 
   
 </body>
-  <script src="js/app.js?v=20260404-1835"></script>
+  <script src="js/app.js?v=20260406-1000"></script>
   <script>
     const isLocalPreviewHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
     let hasReloadedForSwUpdate = false;
-    const APP_BUILD_VERSION = window.APP_BUILD_VERSION || '20260404-1835';
+    const APP_BUILD_VERSION = window.APP_BUILD_VERSION || '20260406-1000';
 
     async function clearLocalPreviewCaches() {
       if (!('caches' in window)) return;

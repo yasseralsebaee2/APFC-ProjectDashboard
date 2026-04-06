@@ -2882,3 +2882,582 @@ body.auth-locked .auth-shell {
   text-align: center;
   padding: 18px;
 }
+
+/* ==========================================================================
+   MOBILE PHONES — 375–430 px portrait + landscape
+   RULE: only NEW selectors / NEW breakpoints. Nothing above this line
+   is modified. Desktop & tablet layouts are fully preserved.
+   ========================================================================== */
+
+/* Default: hide mobile-only controls everywhere */
+.mobile-menu-btn       { display: none; }
+.timeline-filter-toggle { display: none; }
+
+/* --------------------------------------------------------------------------
+   Portrait phones  ≤ 767 px
+   -------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+
+  html, body { overflow: auto; }
+
+  .app {
+    width: 100%;
+    min-height: 100vh;
+    height: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  /* -- Sidebar: compact horizontal strip ---------------------------------- */
+  .sidebar {
+    grid-row: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .sidebar::after { display: none; }
+
+  .brand-apfc {
+    width: 36px;
+    height: 36px;
+    padding: 4px;
+    flex-shrink: 0;
+  }
+
+  .nav-group {
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: auto;
+    flex: 1;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 0;
+  }
+  .nav-group::-webkit-scrollbar { display: none; }
+
+  .nav-btn {
+    min-width: 52px;
+    min-height: 48px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    gap: 2px;
+  }
+
+  .nav-label { font-size: 9px; line-height: 1; }
+
+  .nav-btn.active::after {
+    left: 8px;
+    right: 8px;
+    bottom: 4px;
+    height: 2px;
+  }
+
+  /* -- Topbar: single row + hamburger ------------------------------------- */
+  .topbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    gap: 8px;
+    position: relative;
+  }
+
+  .title-wrap {
+    flex: 1;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .logo-shell-binghatti {
+    width: 90px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+
+  .page-title   { font-size: 13px; }
+  .page-subtitle {
+    font-size: 11px;
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .build-stamp { display: none; }
+
+  /* top-actions becomes an absolute dropdown, hidden by default */
+  .top-actions {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 14px 16px;
+    background: linear-gradient(180deg, rgba(9,13,18,0.98), rgba(6,8,11,0.96));
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+  }
+  .top-actions.mobile-open { display: flex; }
+
+  /* items inside the drawer stretch full-width */
+  .top-actions .chip,
+  .top-actions .action-btn,
+  .top-actions #projectSelector {
+    width: 100%;
+    height: 44px;
+    font-size: 12px;
+    justify-content: center;
+  }
+  .top-actions .mode-toggle  { width: 100%; justify-content: center; }
+  .top-actions .mode-switch  { width: 100%; justify-content: center; }
+
+  /* Hamburger button */
+  .mobile-menu-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.045);
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .mobile-menu-btn:hover {
+    border-color: rgba(142,240,191,0.28);
+    background: rgba(255,255,255,0.07);
+  }
+
+  .mobile-menu-bar {
+    display: block;
+    width: 16px;
+    height: 2px;
+    background: var(--text);
+    border-radius: 999px;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+  }
+  .mobile-menu-btn[aria-expanded="true"] .mobile-menu-bar:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+  }
+  .mobile-menu-btn[aria-expanded="true"] .mobile-menu-bar:nth-child(2) {
+    opacity: 0;
+  }
+  .mobile-menu-btn[aria-expanded="true"] .mobile-menu-bar:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
+  }
+
+  /* -- Content area ------------------------------------------------------- */
+  .content {
+    overflow: visible;
+    padding: 10px;
+    gap: 10px;
+  }
+
+  /* -- KPI row: 2 × 3 ----------------------------------------------------- */
+  .kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .kpi-card {
+    min-height: 0;
+    padding: 10px 12px;
+    gap: 6px;
+    border-radius: 14px;
+  }
+  .kpi-label { font-size: 9px; }
+  .kpi-value { font-size: clamp(18px, 6vw, 24px); }
+  .kpi-meta  { font-size: 9px; flex-wrap: wrap; }
+
+  /* -- All page-views scroll naturally ------------------------------------ */
+  .workspace { min-height: 0; overflow: visible; }
+  .page-view,
+  .page-view.active { height: auto; overflow: visible; }
+
+  /* -- Overview page ------------------------------------------------------ */
+  #pageOverview { height: auto; }
+
+  .panel.hero,
+  #pageOverview .panel.hero { height: auto; min-height: 0; }
+
+  .hero-stage { grid-template-columns: 1fr; gap: 10px; }
+
+  #pageOverview .chart-shell,
+  #pageOverview .exec-matrix {
+    height: auto;
+    min-height: 0;
+    border-radius: 16px;
+  }
+
+  #pageOverview .chart-canvas-wrap {
+    min-height: 240px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .exec-matrix    { height: auto; min-height: 0; }
+  .matrix-table-wrap { max-height: 320px; overflow: auto; }
+
+  /* -- Production page ---------------------------------------------------- */
+  .production-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    height: auto;
+    gap: 10px;
+  }
+  #pageProduction,
+  #pageProduction .production-grid { height: auto; }
+
+  .prod-card {
+    min-height: 240px;
+    height: auto;
+    border-radius: 16px;
+  }
+  .prod-chart-wrap { min-height: 160px; height: 160px; }
+
+  /* -- Manpower page ------------------------------------------------------ */
+  .manpower-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    gap: 10px;
+  }
+  .manpower-table-wrap {
+    max-height: 320px;
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+  .manpower-chart-wrap { min-height: 200px; }
+
+  /* -- Timeline page ------------------------------------------------------ */
+
+  /* Filter toggle button */
+  .timeline-filter-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    grid-column: 1 / -1;
+    padding: 12px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.22s ease;
+    letter-spacing: 0.02em;
+  }
+  .timeline-filter-toggle:hover {
+    border-color: rgba(142,240,191,0.28);
+  }
+  .timeline-filter-toggle::after {
+    content: '▼';
+    font-size: 10px;
+    opacity: 0.55;
+    transition: transform 0.25s ease;
+  }
+  .timeline-filter-toggle.is-open::after {
+    transform: rotate(180deg);
+  }
+
+  /* Sidebar collapses by default; expands on toggle */
+  .timeline-sidebar {
+    order: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.32s ease;
+  }
+  .timeline-sidebar.mobile-open { max-height: 720px; }
+
+  .timeline-layout { grid-template-columns: 1fr; gap: 8px; }
+
+  .timeline-pile-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .timeline-main-grid { grid-template-rows: auto auto; gap: 10px; min-height: 0; }
+
+  .timeline-chart-wrap { min-height: 220px; overflow-x: auto; overflow-y: hidden; }
+
+  .timeline-summary     { grid-template-columns: 1fr; gap: 10px; }
+
+  .timeline-table-panel,
+  .timeline-pie-panel   { min-height: 0; height: auto; }
+
+  .timeline-table-wrap  { max-height: 300px; overflow: auto; }
+  .timeline-pie-wrap    { min-height: 240px; }
+
+  #pageTimeline { height: auto; }
+  .filter-panel { overflow: visible; height: auto; min-height: 0; }
+
+  /* -- Cost page ---------------------------------------------------------- */
+  .cost-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    gap: 10px;
+  }
+  .cost-report-panel,
+  .cost-charts-panel { height: auto; min-height: 0; }
+  .cost-table-wrap   { max-height: 340px; overflow: auto; }
+  .cost-chart-wrap   { min-height: 200px; }
+
+  /* -- Map page ----------------------------------------------------------- */
+  #pageMap    { height: auto; }
+  .map-frame  { min-height: 480px; height: 60vh; }
+
+  /* -- Auth card ---------------------------------------------------------- */
+  .auth-card { padding: 20px 18px; }
+  .auth-brand-row { gap: 12px; margin-bottom: 14px; }
+  .auth-brand-apfc       { width: 48px; height: 48px; }
+  .auth-brand-binghatti  { width: 130px; height: 36px; }
+}
+
+/* --------------------------------------------------------------------------
+   Landscape phones  e.g. iPhone 14 rotated: 844 × 390 px
+   Targets short viewports (height ≤ 480) at phone-width widths
+   -------------------------------------------------------------------------- */
+@media (max-width: 900px) and (max-height: 480px) and (orientation: landscape) {
+
+  html, body { overflow: auto; }
+
+  .app {
+    width: 100%;
+    min-height: 100vh;
+    height: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    grid-row: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    gap: 8px;
+  }
+  .sidebar::after { display: none; }
+
+  .brand-apfc {
+    width: 32px;
+    height: 32px;
+    padding: 3px;
+    flex-shrink: 0;
+  }
+
+  .nav-group {
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: auto;
+    flex: 1;
+    scrollbar-width: none;
+  }
+  .nav-group::-webkit-scrollbar { display: none; }
+
+  .nav-btn {
+    min-width: 48px;
+    min-height: 42px;
+    flex-shrink: 0;
+    border-radius: 10px;
+  }
+  .nav-label { font-size: 8.5px; }
+
+  /* Topbar */
+  .topbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    gap: 8px;
+    position: relative;
+  }
+  .title-wrap { flex: 1; gap: 6px; min-width: 0; }
+  .logo-shell-binghatti { width: 80px; height: 30px; flex-shrink: 0; }
+  .page-title    { font-size: 12px; }
+  .page-subtitle { font-size: 10px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .build-stamp   { display: none; }
+
+  .top-actions {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 14px;
+    background: linear-gradient(180deg, rgba(9,13,18,0.98), rgba(6,8,11,0.96));
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .top-actions.mobile-open { display: flex; }
+
+  .top-actions .chip,
+  .top-actions .action-btn,
+  .top-actions #projectSelector {
+    width: 100%;
+    height: 40px;
+    font-size: 11px;
+    justify-content: center;
+  }
+  .top-actions .mode-toggle { width: 100%; justify-content: center; }
+  .top-actions .mode-switch { width: 100%; justify-content: center; }
+
+  .mobile-menu-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.045);
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    transition: border-color 0.2s ease;
+  }
+
+  .mobile-menu-bar {
+    display: block;
+    width: 14px;
+    height: 1.5px;
+    background: var(--text);
+    border-radius: 999px;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+  }
+  .mobile-menu-btn[aria-expanded="true"] .mobile-menu-bar:nth-child(1) {
+    transform: translateY(5.5px) rotate(45deg);
+  }
+  .mobile-menu-btn[aria-expanded="true"] .mobile-menu-bar:nth-child(2) {
+    opacity: 0;
+  }
+  .mobile-menu-btn[aria-expanded="true"] .mobile-menu-bar:nth-child(3) {
+    transform: translateY(-5.5px) rotate(-45deg);
+  }
+
+  /* Content */
+  .content { overflow: visible; padding: 8px 10px; gap: 8px; }
+
+  /* KPI: 3 columns in landscape */
+  .kpi-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .kpi-card   { min-height: 0; padding: 8px 10px; gap: 4px; border-radius: 12px; }
+  .kpi-label  { font-size: 8.5px; }
+  .kpi-value  { font-size: clamp(14px, 4vw, 20px); }
+  .kpi-meta   { font-size: 8px; }
+
+  .workspace { min-height: 0; overflow: visible; }
+  .page-view,
+  .page-view.active { height: auto; overflow: visible; }
+
+  /* Overview */
+  #pageOverview { height: auto; }
+  .panel.hero,
+  #pageOverview .panel.hero { height: auto; min-height: 0; }
+  .hero-stage { grid-template-columns: 1fr; gap: 8px; }
+  #pageOverview .chart-canvas-wrap { min-height: 180px; overflow-x: auto; overflow-y: hidden; }
+  .exec-matrix       { height: auto; min-height: 0; }
+  .matrix-table-wrap { max-height: 240px; overflow: auto; }
+
+  /* Production */
+  .production-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    height: auto;
+    gap: 8px;
+  }
+  #pageProduction,
+  #pageProduction .production-grid { height: auto; }
+  .prod-card { min-height: 180px; height: auto; border-radius: 14px; }
+  .prod-chart-wrap { min-height: 120px; height: 120px; }
+
+  /* Manpower */
+  .manpower-layout { grid-template-columns: 1fr; height: auto; gap: 8px; }
+  .manpower-table-wrap { max-height: 260px; overflow-x: auto; overflow-y: auto; }
+  .manpower-chart-wrap { min-height: 180px; }
+
+  /* Timeline */
+  .timeline-filter-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    grid-column: 1 / -1;
+    padding: 8px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.22s ease;
+    letter-spacing: 0.02em;
+  }
+  .timeline-filter-toggle::after {
+    content: '▼';
+    font-size: 10px;
+    opacity: 0.55;
+    transition: transform 0.25s ease;
+  }
+  .timeline-filter-toggle.is-open::after { transform: rotate(180deg); }
+
+  .timeline-sidebar { order: 0; max-height: 0; overflow: hidden; transition: max-height 0.32s ease; }
+  .timeline-sidebar.mobile-open { max-height: 500px; }
+  .timeline-layout  { grid-template-columns: 1fr; gap: 8px; }
+  .timeline-pile-list { grid-template-columns: repeat(4, minmax(0, 1fr)); max-height: 150px; overflow-y: auto; }
+  .timeline-main-grid { grid-template-rows: auto auto; gap: 8px; }
+  .timeline-chart-wrap { min-height: 180px; overflow-x: auto; overflow-y: hidden; }
+  .timeline-summary { grid-template-columns: 1fr; gap: 8px; }
+  .timeline-table-panel,
+  .timeline-pie-panel { min-height: 0; height: auto; }
+  .timeline-table-wrap { max-height: 220px; overflow: auto; }
+  .timeline-pie-wrap   { min-height: 200px; }
+  #pageTimeline { height: auto; }
+  .filter-panel { overflow: visible; height: auto; min-height: 0; }
+
+  /* Cost */
+  .cost-layout { grid-template-columns: 1fr; height: auto; gap: 8px; }
+  .cost-report-panel,
+  .cost-charts-panel { height: auto; min-height: 0; }
+  .cost-table-wrap   { max-height: 260px; overflow: auto; }
+  .cost-chart-wrap   { min-height: 160px; }
+
+  /* Map */
+  #pageMap   { height: auto; }
+  .map-frame { min-height: 360px; height: 50vh; }
+}

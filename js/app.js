@@ -3555,7 +3555,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       menuBtn.setAttribute('aria-expanded', String(isOpen));
     });
 
-    /* Close when tapping outside the topbar */
+    /* Close only when tapping completely outside the topbar area */
     document.addEventListener('click', function (e) {
       if (!e.target.closest('header.topbar')) {
         topActions.classList.remove('mobile-open');
@@ -3563,9 +3563,14 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       }
     });
 
-    /* Close when any action inside the drawer is activated */
+    /* Close after a button action — but NOT for select/toggle elements
+       so the project selector and mode toggle remain fully usable        */
     topActions.addEventListener('click', function (e) {
-      if (e.target !== menuBtn) {
+      const tag = e.target.tagName;
+      const isInteractive = tag === 'SELECT' || tag === 'INPUT' ||
+                            e.target.closest('.mode-toggle') ||
+                            e.target.closest('.mode-switch');
+      if (!isInteractive) {
         topActions.classList.remove('mobile-open');
         menuBtn.setAttribute('aria-expanded', 'false');
       }

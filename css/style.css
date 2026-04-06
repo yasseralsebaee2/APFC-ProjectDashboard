@@ -2884,7 +2884,7 @@ body.auth-locked .auth-shell {
 }
 
 /* ==========================================================================
-   MOBILE PHONES — 375–430 px portrait + landscape
+   MOBILE PHONES — 375–430 px portrait + landscape  V2
    RULE: only NEW selectors / NEW breakpoints. Nothing above this line
    is modified. Desktop & tablet layouts are fully preserved.
    ========================================================================== */
@@ -2905,58 +2905,67 @@ body.auth-locked .auth-shell {
     min-height: 100vh;
     height: auto;
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto;
   }
 
-  /* -- Sidebar: compact horizontal strip ---------------------------------- */
+  /* -- Sidebar → fixed bottom tab bar ------------------------------------- */
   .sidebar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    height: 62px;
     grid-row: auto;
     border-right: 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 0;
+    border-top: 1px solid var(--border);
     flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 10px;
-    gap: 8px;
+    align-items: stretch;
+    padding: 0;
+    gap: 0;
+    background: rgba(6,9,13,0.97);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
   .sidebar::after { display: none; }
 
-  .brand-apfc {
-    width: 36px;
-    height: 36px;
-    padding: 4px;
-    flex-shrink: 0;
-  }
+  /* Hide logo in the tab bar — Binghatti logo is in topbar */
+  .brand-apfc { display: none; }
 
   .nav-group {
     flex-direction: row;
-    gap: 4px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    width: auto;
-    flex: 1;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-    padding: 2px 0;
+    width: 100%;
+    height: 100%;
+    gap: 0;
+    overflow: visible;
+    padding: 0;
   }
-  .nav-group::-webkit-scrollbar { display: none; }
 
   .nav-btn {
-    min-width: 52px;
-    min-height: 48px;
-    flex-shrink: 0;
-    border-radius: 12px;
-    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    border-radius: 0;
+    gap: 3px;
+    padding: 6px 2px 8px;
+    border: 0;
+    border-top: 2px solid transparent;
+    box-shadow: none;
   }
+
+  .nav-btn.active {
+    border-top: 2px solid rgba(142,240,191,0.85);
+    background: linear-gradient(180deg, rgba(142,240,191,0.06) 0%, transparent 100%);
+    box-shadow: none;
+  }
+
+  /* Remove bottom underline pill — tab bar uses top border instead */
+  .nav-btn::before     { display: none; }
+  .nav-btn.active::after { display: none; }
 
   .nav-label { font-size: 9px; line-height: 1; }
-
-  .nav-btn.active::after {
-    left: 8px;
-    right: 8px;
-    bottom: 4px;
-    height: 2px;
-  }
 
   /* -- Topbar: single row + hamburger ------------------------------------- */
   .topbar {
@@ -2990,7 +2999,7 @@ body.auth-locked .auth-shell {
   }
   .build-stamp { display: none; }
 
-  /* top-actions becomes an absolute dropdown, hidden by default */
+  /* -- Top-actions: professional control drawer --------------------------- */
   .top-actions {
     display: none;
     position: absolute;
@@ -3000,27 +3009,86 @@ body.auth-locked .auth-shell {
     z-index: 200;
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
-    padding: 14px 16px;
-    background: linear-gradient(180deg, rgba(9,13,18,0.98), rgba(6,8,11,0.96));
-    border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+    gap: 0;
+    padding: 0 0 14px;
+    background: rgba(8,11,15,0.99);
+    border-bottom: 1px solid var(--border-2);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow: 0 20px 52px rgba(0,0,0,0.52);
   }
   .top-actions.mobile-open { display: flex; }
 
-  /* items inside the drawer stretch full-width */
-  .top-actions .chip,
-  .top-actions .action-btn,
-  .top-actions #projectSelector {
-    width: 100%;
-    height: 44px;
-    font-size: 12px;
+  /* Drawer header label */
+  .top-actions::before {
+    content: 'Dashboard Controls';
+    display: block;
+    padding: 12px 16px 10px;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(142,240,191,0.6);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    margin-bottom: 4px;
+  }
+
+  /* Status row: chip behaves as a read-only badge */
+  .top-actions .chip {
+    height: 38px;
+    font-size: 11px;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 16px;
+    border-radius: 0;
+    border: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    background: transparent;
+    box-shadow: none;
+    color: rgba(244,247,251,0.52);
+    margin-bottom: 6px;
+  }
+  /* Animated green status dot */
+  .top-actions .chip::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(142,240,191,0.55);
+    flex-shrink: 0;
+    animation: pulse-dot 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(142,240,191,0.55); }
+    50%       { opacity: 0.6; box-shadow: 0 0 3px rgba(142,240,191,0.2); }
+  }
+
+  /* Date mode toggle: sits in the drawer at full width with inset margins */
+  .top-actions .mode-toggle {
+    margin: 0 16px 8px;
+    width: calc(100% - 32px);
     justify-content: center;
   }
-  .top-actions .mode-toggle  { width: 100%; justify-content: center; }
-  .top-actions .mode-switch  { width: 100%; justify-content: center; }
+
+  /* Action buttons and project selector */
+  .top-actions .action-btn,
+  .top-actions #projectSelector {
+    margin: 6px 16px 0;
+    width: calc(100% - 32px);
+    height: 46px;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 14px;
+    justify-content: center;
+  }
+
+  /* Sign out: subtle destructive tint */
+  .top-actions #signOutBtn {
+    border-color: rgba(248,113,113,0.22);
+    color: rgba(252,165,165,0.85);
+    background: rgba(248,113,113,0.06);
+  }
 
   /* Hamburger button */
   .mobile-menu-btn {
@@ -3065,7 +3133,7 @@ body.auth-locked .auth-shell {
   /* -- Content area ------------------------------------------------------- */
   .content {
     overflow: visible;
-    padding: 10px;
+    padding: 10px 10px 80px;  /* 80px bottom = 62px tab bar + 18px breathing room */
     gap: 10px;
   }
 
@@ -3140,6 +3208,17 @@ body.auth-locked .auth-shell {
     max-height: 320px;
     overflow-x: auto;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .manpower-table {
+    table-layout: auto;
+    min-width: 620px;
+  }
+  .manpower-table th,
+  .manpower-table td {
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
   }
   .manpower-chart-wrap { min-height: 200px; }
 
@@ -3243,46 +3322,60 @@ body.auth-locked .auth-shell {
     min-height: 100vh;
     height: auto;
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto;
   }
 
-  /* Sidebar */
+  /* Sidebar → fixed bottom tab bar (landscape) */
   .sidebar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    height: 54px;
     grid-row: auto;
     border-right: 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 0;
+    border-top: 1px solid var(--border);
     flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    padding: 6px 12px;
-    gap: 8px;
+    align-items: stretch;
+    padding: 0;
+    gap: 0;
+    background: rgba(6,9,13,0.97);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
   .sidebar::after { display: none; }
-
-  .brand-apfc {
-    width: 32px;
-    height: 32px;
-    padding: 3px;
-    flex-shrink: 0;
-  }
+  .brand-apfc { display: none; }
 
   .nav-group {
     flex-direction: row;
-    gap: 4px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    width: auto;
-    flex: 1;
-    scrollbar-width: none;
+    width: 100%;
+    height: 100%;
+    gap: 0;
+    overflow: visible;
+    padding: 0;
   }
-  .nav-group::-webkit-scrollbar { display: none; }
 
   .nav-btn {
-    min-width: 48px;
-    min-height: 42px;
-    flex-shrink: 0;
-    border-radius: 10px;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    border-radius: 0;
+    gap: 2px;
+    padding: 4px 2px 6px;
+    border: 0;
+    border-top: 2px solid transparent;
+    box-shadow: none;
   }
+  .nav-btn.active {
+    border-top: 2px solid rgba(142,240,191,0.85);
+    background: linear-gradient(180deg, rgba(142,240,191,0.06) 0%, transparent 100%);
+    box-shadow: none;
+  }
+  .nav-btn::before     { display: none; }
+  .nav-btn.active::after { display: none; }
   .nav-label { font-size: 8.5px; }
 
   /* Topbar */
@@ -3307,30 +3400,52 @@ body.auth-locked .auth-shell {
     left: 0;
     right: 0;
     z-index: 200;
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
-    padding: 10px 14px;
-    background: linear-gradient(180deg, rgba(9,13,18,0.98), rgba(6,8,11,0.96));
-    border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
-    max-height: 70vh;
-    overflow-y: auto;
+    padding: 12px 16px;
+    background: rgba(8,11,15,0.99);
+    border-bottom: 1px solid var(--border-2);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.52);
   }
   .top-actions.mobile-open { display: flex; }
 
-  .top-actions .chip,
+  /* In landscape drawer, items flow in a row with wrapping */
+  .top-actions .chip {
+    height: 34px;
+    font-size: 10.5px;
+    gap: 8px;
+    padding: 0 12px;
+    color: rgba(244,247,251,0.52);
+    background: transparent;
+    border-color: rgba(255,255,255,0.06);
+  }
+  .top-actions .chip::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px rgba(142,240,191,0.5);
+    flex-shrink: 0;
+  }
+  .top-actions .mode-toggle { height: 34px; }
   .top-actions .action-btn,
   .top-actions #projectSelector {
-    width: 100%;
-    height: 40px;
+    height: 36px;
     font-size: 11px;
-    justify-content: center;
+    font-weight: 700;
+    border-radius: 11px;
+    padding: 0 14px;
   }
-  .top-actions .mode-toggle { width: 100%; justify-content: center; }
-  .top-actions .mode-switch { width: 100%; justify-content: center; }
+  .top-actions #signOutBtn {
+    border-color: rgba(248,113,113,0.22);
+    color: rgba(252,165,165,0.85);
+    background: rgba(248,113,113,0.06);
+  }
 
   .mobile-menu-btn {
     display: flex;
@@ -3368,7 +3483,7 @@ body.auth-locked .auth-shell {
   }
 
   /* Content */
-  .content { overflow: visible; padding: 8px 10px; gap: 8px; }
+  .content { overflow: visible; padding: 8px 10px 72px; gap: 8px; } /* 72px = 54px tab bar + 18px buffer */
 
   /* KPI: 3 columns in landscape */
   .kpi-row {
@@ -3405,9 +3520,24 @@ body.auth-locked .auth-shell {
   .prod-card { min-height: 180px; height: auto; border-radius: 14px; }
   .prod-chart-wrap { min-height: 120px; height: 120px; }
 
-  /* Manpower */
+  /* Manpower — allow horizontal scroll so all column headers are readable */
   .manpower-layout { grid-template-columns: 1fr; height: auto; gap: 8px; }
-  .manpower-table-wrap { max-height: 260px; overflow-x: auto; overflow-y: auto; }
+  .manpower-table-wrap {
+    max-height: 260px;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .manpower-table {
+    table-layout: auto;
+    min-width: 620px; /* enough for Date + 10 role columns */
+  }
+  .manpower-table th,
+  .manpower-table td {
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+  }
   .manpower-chart-wrap { min-height: 180px; }
 
   /* Timeline */
@@ -3446,7 +3576,28 @@ body.auth-locked .auth-shell {
   .timeline-table-panel,
   .timeline-pie-panel { min-height: 0; height: auto; }
   .timeline-table-wrap { max-height: 220px; overflow: auto; }
-  .timeline-pie-wrap   { min-height: 200px; }
+  /* Constrain pie chart so it doesn't overflow and all labels are visible */
+  .timeline-pie-wrap {
+    min-height: 0;
+    max-height: 200px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .timeline-pie-svg {
+    max-height: 200px;
+    max-width: 200px;
+    width: 200px;
+    height: 200px;
+    margin: 0 auto;
+  }
+  .timeline-pie-center {
+    width: 200px;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+  }
   #pageTimeline { height: auto; }
   .filter-panel { overflow: visible; height: auto; min-height: 0; }
 

@@ -271,7 +271,11 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
 
     function isManagerUser() {
       const role = normalizeText(currentUser?.type).toLowerCase();
-      return role === 'manager' || isAllProjectsValue(currentUser?.project);
+      return role === 'manager';
+    }
+
+    function canSelectProjects() {
+      return !!currentUser && (isManagerUser() || isAllProjectsValue(currentUser?.project));
     }
 
     function canAccessPage(page) {
@@ -285,13 +289,13 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       if (els.projectScopeBtn) els.projectScopeBtn.textContent = getScopeLabel();
 
       if (els.projectSelector) {
-        const showProjectSelector = isManagerUser();
+        const showProjectSelector = canSelectProjects();
         els.projectSelector.hidden = !showProjectSelector;
         els.projectSelector.style.display = showProjectSelector ? '' : 'none';
       }
 
       if (els.projectScopeBtn) {
-        const showProjectButton = !isManagerUser();
+        const showProjectButton = !canSelectProjects();
         els.projectScopeBtn.hidden = !showProjectButton;
         els.projectScopeBtn.style.display = showProjectButton ? '' : 'none';
       }
@@ -305,6 +309,12 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
           btn.classList.toggle('role-hidden', !allowCost);
         }
       });
+
+      if (els.pageCost) {
+        const allowCost = isManagerUser();
+        els.pageCost.hidden = !allowCost;
+        els.pageCost.style.display = allowCost ? '' : 'none';
+      }
 
       if (els.signOutBtn) {
         els.signOutBtn.hidden = !currentUser;
@@ -432,7 +442,7 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
     function syncProjectScopeFromData() {
       if (!rawRows.length) return;
 
-      if (isManagerUser()) {
+      if (canSelectProjects()) {
         const projects = getProjectList(rawRows).filter(project => normalizeText(project).toLowerCase() !== 'all');
         if (projects.length) {
           const currentProjectIsValid = projects.includes(selectedProject);
@@ -591,7 +601,8 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
     }
 
     function getRowsForProject(project) {
-      const targetProject = normalizeText(project || selectedProject || DEFAULT_PROJECT);
+      const rawProject = normalizeText(project || selectedProject || DEFAULT_PROJECT);
+      const targetProject = isAllProjectsValue(rawProject) ? '' : rawProject;
       return rawRows.filter(r => {
         const projectMatch = !targetProject || normalizeText(r.project) === targetProject;
         const plotMatch = isAllPlotsValue(selectedPlot) || normalizeText(r.plot) === normalizeText(selectedPlot);
@@ -3206,9 +3217,10 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
     }
 
     function getFilteredManpowerRows(project) {
-      const targetProject = normalizeText(project || selectedProject || DEFAULT_PROJECT);
+      const rawProject = normalizeText(project || selectedProject || DEFAULT_PROJECT);
+      const targetProject = isAllProjectsValue(rawProject) ? '' : rawProject;
       const filtered = manpowerRows.filter(row => {
-        const projectMatch = normalizeText(row?.project) === targetProject;
+        const projectMatch = !targetProject || normalizeText(row?.project) === targetProject;
         const plotMatch = isAllPlotsValue(selectedPlot) || normalizeText(row?.plot) === normalizeText(selectedPlot);
         return projectMatch && plotMatch;
       });
@@ -4601,12 +4613,12 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           await loadDashboardData();
         }
 
-        if (els.projectSelector) {
-          els.projectSelector.addEventListener('change', e => {
-            if (!isManagerUser()) return;
-            selectedProject = e.target.value;
-            timelineState.pile = 'all';
-            persistScopedSession();
+          if (els.projectSelector) {
+            els.projectSelector.addEventListener('change', e => {
+            if (!canSelectProjects()) return;
+              selectedProject = e.target.value;
+              timelineState.pile = 'all';
+              persistScopedSession();
             updateTimelinePileList(selectedProject);
             syncTimelinePresetButtons();
             renderDashboard(selectedProject);

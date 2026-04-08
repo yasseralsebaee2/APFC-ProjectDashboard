@@ -64,6 +64,7 @@
         <button class="nav-btn active" data-icon="overview"><span class="nav-icon"></span><span class="nav-label">Overview</span></button>
         <button class="nav-btn" data-icon="overview"><span class="nav-icon"></span><span class="nav-label">Map</span></button>
         <button class="nav-btn" data-icon="production"><span class="nav-icon"></span><span class="nav-label">Production</span></button>
+        <button class="nav-btn" data-icon="utilization"><span class="nav-icon"></span><span class="nav-label">Utilization</span></button>
         <button class="nav-btn" data-icon="manpower"><span class="nav-icon"></span><span class="nav-label">Manpower</span></button>
         <button class="nav-btn" data-icon="timeline"><span class="nav-icon"></span><span class="nav-label">Timeline</span></button>
         <button class="nav-btn" data-icon="cost"><span class="nav-icon"></span><span class="nav-label">Cost</span></button>
@@ -184,6 +185,16 @@
                     </svg>
                     <div class="chart-tooltip" id="chartTooltip"></div>
                   </div>
+                  <div class="overview-series-legend" id="overviewSeriesLegend" hidden>
+                    <div class="overview-series-item">
+                      <span class="overview-series-line overview-series-line-actual"></span>
+                      <span>Cumulative Actual</span>
+                    </div>
+                    <div class="overview-series-item">
+                      <span class="overview-series-line overview-series-line-planned"></span>
+                      <span>Planned</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -300,6 +311,53 @@
               <div class="manpower-chart-wrap">
                 <svg class="manpower-chart-svg" id="manpowerHistSvg" viewBox="0 0 1000 320" preserveAspectRatio="xMidYMid meet"></svg>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page-view" id="pageUtilization">
+          <div class="utilization-layout">
+            <div class="utilization-report-panel">
+              <div class="panel-header">
+                <div>
+                  <div class="panel-title">Daily Rig Utilization Matrix</div>
+                  <div class="panel-subtitle">Drilling utilization by rig based on a 12 hr shift</div>
+                </div>
+                <div class="panel-tag">12 Hr</div>
+              </div>
+              <div class="utilization-table-wrap">
+                <table class="utilization-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Rig</th>
+                      <th class="num">Drilling Hr</th>
+                      <th class="num">Shift Hr</th>
+                      <th class="num">Rig Util.</th>
+                      <th class="num">Day Total</th>
+                    </tr>
+                  </thead>
+                  <tbody id="utilizationTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="utilization-chart-panel">
+              <div class="panel-header">
+                <div>
+                  <div class="panel-title">Rig Utilization</div>
+                  <div class="panel-subtitle">Daily and cumulative utilization by rig</div>
+                </div>
+                <div class="panel-tag" id="utilizationChartTag">Daily</div>
+              </div>
+              <div class="utilization-toolbar">
+                <button class="mini-toggle active" data-util-mode="daily" type="button">Daily</button>
+                <button class="mini-toggle" data-util-mode="cumulative" type="button">Cumulative</button>
+              </div>
+              <div class="utilization-chart-wrap" id="utilizationChartWrap">
+                <svg class="utilization-chart-svg" id="utilizationSvg" viewBox="0 0 1000 320" preserveAspectRatio="xMidYMid meet"></svg>
+              </div>
+              <div class="utilization-legend" id="utilizationLegend"></div>
             </div>
           </div>
         </section>

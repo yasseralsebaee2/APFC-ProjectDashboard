@@ -49,6 +49,7 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       chartWrap: document.getElementById('chartWrap'),
       chartSvg: document.getElementById('chartSvg'),
       chartTooltip: document.getElementById('chartTooltip'),
+      overviewSeriesLegend: document.getElementById('overviewSeriesLegend'),
 
       timelineStartDate: document.getElementById('timelineStartDate'),
       timelineEndDate: document.getElementById('timelineEndDate'),
@@ -88,6 +89,7 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       pageOverview: document.getElementById('pageOverview'),
       pageMap: document.getElementById('pageMap'),
       pageProduction: document.getElementById('pageProduction'),
+      pageUtilization: document.getElementById('pageUtilization'),
       pageManpower: document.getElementById('pageManpower'),
       pageTimeline: document.getElementById('pageTimeline'),
       pageCost: document.getElementById('pageCost'),
@@ -99,6 +101,11 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       costLmSvg: document.getElementById('costLmSvg'),
       manpowerTableBody: document.getElementById('manpowerTableBody'),
       manpowerHistSvg: document.getElementById('manpowerHistSvg'),
+      utilizationTableBody: document.getElementById('utilizationTableBody'),
+      utilizationSvg: document.getElementById('utilizationSvg'),
+      utilizationChartTag: document.getElementById('utilizationChartTag'),
+      utilizationLegend: document.getElementById('utilizationLegend'),
+      utilizationChartWrap: document.getElementById('utilizationChartWrap'),
       projectMapFrame: document.getElementById('projectMapFrame'),
       navButtons: Array.from(document.querySelectorAll('.nav-btn')),
       prodSvgs: {
@@ -109,7 +116,8 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
         overconsumption: document.getElementById('prodSvgOverconsumption'),
         overexcavation: document.getElementById('prodSvgOverexcavation')
       },
-      prodToolButtons: Array.from(document.querySelectorAll('.mini-toggle'))
+      prodToolButtons: Array.from(document.querySelectorAll('.mini-toggle[data-prod-key]')),
+      utilizationModeButtons: Array.from(document.querySelectorAll('[data-util-mode]'))
     };
 
     let rawRows = [];
@@ -122,6 +130,7 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
     let chartMetric = 'piles';
     let chartGranularity = 'day';
     let activePage = 'overview';
+    let utilizationMode = 'daily';
     let overviewDateMode = 'shift'; // shared reporting mode for Overview + Production only
     let prodState = {
       gross: 'day',
@@ -147,6 +156,15 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
 
     function normalizeLogin(value) {
       return normalizeText(value).toLowerCase();
+    }
+
+    function escapeHtml(value) {
+      return normalizeText(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     function isAllPlotsValue(value) {
@@ -628,6 +646,15 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       return new Set(getExecutedRows(rows).map(r => normalizeText(r.machine)).filter(Boolean)).size;
     }
 
+    function getPlannedRigCountForDate(rows, dateKey) {
+      const projectKey = normalizeText(rows?.[0]?.project).toLowerCase();
+      if (projectKey === 'titania') {
+        return dateKey >= '2026-04-03' ? 2 : 1;
+      }
+      const activeRigs = getActiveRigCount(rows);
+      return activeRigs || 1;
+    }
+
     function getPeriodEndKey(periodStartKey, granularity) {
       const next = incrementPeriod(new Date(periodStartKey + 'T00:00:00Z'), granularity);
       next.setUTCDate(next.getUTCDate() - 1);
@@ -639,11 +666,8 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       if (!data.length) return [];
       const executedDates = getExecutedRows(rows).map(r => getOverviewDateKey(r)).filter(Boolean).sort();
       if (!executedDates.length) return [];
-      const activeRigs = getActiveRigCount(rows);
-      if (!activeRigs) return [];
 
       const firstDate = executedDates[0];
-      const plannedPerWorkingDay = activeRigs * 3;
       let cumulative = 0;
 
       return data.map(item => {
@@ -652,7 +676,9 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
         let planned = 0;
         while (cursor.toISOString().slice(0, 10) <= periodEnd) {
           const key = cursor.toISOString().slice(0, 10);
-          if (isWorkingDay(key)) planned += plannedPerWorkingDay;
+          if (isWorkingDay(key)) {
+            planned += getPlannedRigCountForDate(rows, key) * 3;
+          }
           cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
         cumulative = planned;
@@ -876,13 +902,14 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       els.pageOverview.classList.toggle('active', page === 'overview');
       if (els.pageMap) els.pageMap.classList.toggle('active', page === 'map');
       els.pageProduction.classList.toggle('active', page === 'production');
+      if (els.pageUtilization) els.pageUtilization.classList.toggle('active', page === 'utilization');
       if (els.pageManpower) els.pageManpower.classList.toggle('active', page === 'manpower');
       els.pageTimeline.classList.toggle('active', page === 'timeline');
       if (els.pageCost) els.pageCost.classList.toggle('active', page === 'cost');
       els.kpiRow.style.display = page === 'overview' ? 'grid' : 'none';
       document.querySelector('.content')?.classList.toggle('production-mode', page === 'production');
 
-      const showDateModeToggle = page === 'overview' || page === 'production';
+      const showDateModeToggle = page === 'overview' || page === 'production' || page === 'utilization';
       const dateModeToggle = document.getElementById('overviewDateModeToggle');
       if (dateModeToggle) {
         dateModeToggle.style.display = showDateModeToggle ? 'inline-flex' : 'none';
@@ -894,6 +921,7 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
           (page === 'overview' && label === 'Overview') ||
           (page === 'map' && label === 'Map') ||
           (page === 'production' && label === 'Production') ||
+          (page === 'utilization' && label === 'Utilization') ||
           (page === 'manpower' && label === 'Manpower') ||
           (page === 'timeline' && label === 'Timeline') ||
           (page === 'cost' && label === 'Cost');
@@ -903,6 +931,7 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       if (page === 'overview') renderDashboard(selectedProject);
       if (page === 'map') window.setTimeout(triggerMapFocusAnimation, 80);
       if (page === 'production') renderProductionPage(selectedProject, true);
+      if (page === 'utilization') renderUtilizationPage(selectedProject);
       if (page === 'manpower') renderManpowerPage(selectedProject);
       if (page === 'timeline') renderTimelinePage(selectedProject, true);
       if (page === 'cost') renderCostPage(selectedProject, true);
@@ -1383,6 +1412,10 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
     function renderChart(rows) {
       const data = buildChartDataset(rows, chartMetric, chartMode);
       const plannedData = (chartMode === 'cumulative' && chartMetric === 'piles') ? buildPlannedCurve(rows, data) : [];
+      if (els.overviewSeriesLegend) {
+        const showLegend = chartMode === 'cumulative' && chartMetric === 'piles' && plannedData.length > 0;
+        els.overviewSeriesLegend.hidden = !showLegend;
+      }
       const titleMetric = metricLabel(chartMetric);
       const granularityLabel = chartGranularity === 'day' ? 'Day' : (chartGranularity === 'week' ? 'Week' : 'Month');
       const useTwoRowMobileDayAxis = window.matchMedia('(max-width: 767px)').matches && chartGranularity === 'day';
@@ -1802,6 +1835,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       broadcastAuthContext();
 
       renderDashboard(selectedProject);
+      if (activePage === 'utilization') renderUtilizationPage(selectedProject);
       if (activePage === 'manpower') renderManpowerPage(selectedProject);
       els.dataSourceChip.textContent = 'Live Data Source';
     }
@@ -3322,6 +3356,468 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       svg.onmouseleave = hideTooltip;
     }
 
+    function getUtilizationRigColors(rigKeys) {
+      const palette = ['#8ef0bf', '#7bb6ff', '#f0d58e', '#f5a6b8', '#c7b8ff', '#7fe7f0'];
+      return rigKeys.reduce((acc, rig, idx) => {
+        acc[rig] = palette[idx % palette.length];
+        return acc;
+      }, {});
+    }
+
+    function getUtilizationRows(project) {
+      const rows = getRowsForProject(project);
+      const grouped = new Map();
+
+      const getRigNameForUtilization = row => normalizeText(
+        row?.machine ||
+        row?.Machine ||
+        row?.rig ||
+        row?.Rig ||
+        row?.machine_no ||
+        row?.machineNo ||
+        row?.machineno
+      );
+
+      const getDrillingHoursForUtilization = row => {
+        const direct = Number(
+          row?.asbuilt_durationdrilling ??
+          row?.asbuilt_DurationDrilling ??
+          row?.asbuilt_drillingduration ??
+          row?.durationdrilling
+        );
+        if (Number.isFinite(direct) && direct >= 0) return direct;
+        const drillStart = getRowDate(row, ['asbuilt_drillingStart', 'asbuilt_drillingstart', 'asbuilt_DrillingStart']);
+        const drillEnd = getRowDate(row, ['asbuilt_drillingEnd', 'asbuilt_drillingend', 'asbuilt_DrillingEnd']);
+        return hoursBetween(drillStart, drillEnd) || 0;
+      };
+
+      const utilizationCandidates = rows.filter(row => {
+        const dateKey = getOverviewDateKey(row);
+        const rig = getRigNameForUtilization(row);
+        const drillingHours = getDrillingHoursForUtilization(row);
+        const hasExecutionFlag = row?.isExecuted === true;
+        const hasConcreteEnd = !!getRowDate(row, ['asbuilt_concreteEnd', 'asbuilt_concreteend', 'asbuilt_ConcreteEnd']);
+        return !!dateKey && !!rig && (hasExecutionFlag || hasConcreteEnd || drillingHours > 0);
+      });
+
+      utilizationCandidates.forEach(row => {
+        const dateKey = getOverviewDateKey(row);
+        const rig = getRigNameForUtilization(row);
+        if (!dateKey || !rig) return;
+        const drillingHours = getDrillingHoursForUtilization(row);
+        const key = `${dateKey}__${rig}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, { date: dateKey, rig, drillingHours: 0, shiftHours: 12 });
+        }
+        grouped.get(key).drillingHours += drillingHours;
+      });
+
+      return Array.from(grouped.values())
+        .map(item => ({
+          ...item,
+          utilization: item.shiftHours > 0 ? (item.drillingHours / item.shiftHours) * 100 : 0
+        }))
+        .sort((a, b) => b.date.localeCompare(a.date) || a.rig.localeCompare(b.rig, undefined, { numeric: true }));
+    }
+
+    function buildUtilizationSeries(rows, mode = utilizationMode) {
+      if (!rows.length) return { dates: [], rigs: [], series: [], colors: {} };
+      const dates = Array.from(new Set(rows.map(row => row.date))).sort();
+      const rigs = Array.from(new Set(rows.map(row => row.rig))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      const colors = getUtilizationRigColors(rigs);
+
+      const byRigDate = new Map();
+      rows.forEach(row => {
+        byRigDate.set(`${row.rig}__${row.date}`, row);
+      });
+
+      const series = rigs.map(rig => {
+        let cumulativeHours = 0;
+        let activeShiftDays = 0;
+        let mobilized = false;
+        const points = dates.map((dateKey, idx) => {
+          const row = byRigDate.get(`${rig}__${dateKey}`);
+          const drillingHours = row ? row.drillingHours : 0;
+          const dailyUtilization = row ? row.utilization : 0;
+          if (row) mobilized = true;
+          if (mobilized) activeShiftDays += 1;
+          cumulativeHours += drillingHours;
+          const cumulativeUtilization = mobilized && activeShiftDays > 0
+            ? (cumulativeHours / (activeShiftDays * 12)) * 100
+            : null;
+          return {
+            date: dateKey,
+            rig,
+            drillingHours,
+            utilization: dailyUtilization,
+            cumulativeUtilization,
+            mobilized
+          };
+        });
+        return {
+          rig,
+          color: colors[rig],
+          points
+        };
+      });
+
+      return { dates, rigs, series, colors };
+    }
+
+    function renderUtilizationLegend(series) {
+      if (!els.utilizationLegend) return;
+      if (!series.length) {
+        els.utilizationLegend.innerHTML = '';
+        return;
+      }
+      els.utilizationLegend.innerHTML = series.map(item => `
+        <div class="utilization-legend-item">
+          <span class="utilization-legend-swatch" style="background:${item.color};"></span>
+          <span>${escapeHtml(item.rig)}</span>
+        </div>
+      `).join('');
+    }
+
+    function getUtilizationDayGroups(rows) {
+      const grouped = new Map();
+      rows.forEach(row => {
+        if (!grouped.has(row.date)) grouped.set(row.date, []);
+        grouped.get(row.date).push(row);
+      });
+      return Array.from(grouped.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([date, items]) => {
+          const drillingHours = items.reduce((sum, item) => sum + item.drillingHours, 0);
+          const shiftHours = items.reduce((sum, item) => sum + item.shiftHours, 0);
+          return {
+            date,
+            items: items.slice().sort((a, b) => a.rig.localeCompare(b.rig, undefined, { numeric: true })),
+            totalUtilization: shiftHours > 0 ? (drillingHours / shiftHours) * 100 : 0
+          };
+        });
+    }
+
+    function renderUtilizationChart(rows) {
+      const svg = els.utilizationSvg;
+      if (!svg) return;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      const { dates, series } = buildUtilizationSeries(rows, utilizationMode);
+      renderUtilizationLegend(series);
+      if (els.utilizationChartTag) {
+        els.utilizationChartTag.textContent = utilizationMode === 'daily' ? 'Daily' : 'Cumulative';
+      }
+
+      if (!dates.length || !series.length) {
+        const empty = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        empty.setAttribute('x', '500');
+        empty.setAttribute('y', '160');
+        empty.setAttribute('text-anchor', 'middle');
+        empty.setAttribute('fill', 'rgba(244,247,251,0.62)');
+        empty.setAttribute('font-size', '14');
+        empty.setAttribute('font-weight', '700');
+        empty.textContent = 'No rig utilization data available';
+        svg.appendChild(empty);
+        return;
+      }
+
+      const chartH = 330;
+      const left = 78;
+      const right = 24;
+      const top = 18;
+      const bottom = 72;
+      const rigCount = Math.max(series.length, 1);
+      const overflowThreshold = utilizationMode === 'daily' ? 8 : 10;
+      const minDaySpan = utilizationMode === 'daily'
+        ? Math.max(58, rigCount * 16 + (rigCount - 1) * 4)
+        : 72;
+      const wrapWidth = Math.max((els.utilizationChartWrap?.clientWidth || 0) - 4, 760);
+      const requiredChartW = left + right + (dates.length * minDaySpan);
+      const shouldOverflow = dates.length > overflowThreshold && requiredChartW > wrapWidth;
+      const chartW = shouldOverflow ? Math.max(wrapWidth, requiredChartW) : wrapWidth;
+      const innerW = chartW - left - right;
+      const innerH = chartH - top - bottom;
+      const plotSidePad = utilizationMode === 'daily' ? 26 : 14;
+      const effectiveW = Math.max(innerW - plotSidePad * 2, 1);
+      const maxVal = Math.max(100, ...series.flatMap(item => item.points
+        .map(point => (utilizationMode === 'daily' ? point.utilization : point.cumulativeUtilization))
+        .filter(value => Number.isFinite(value))));
+      const yFor = value => top + innerH - (Math.max(0, value) / maxVal) * innerH;
+      const stepX = dates.length > 1 ? effectiveW / (dates.length - 1) : 0;
+
+      svg.setAttribute('viewBox', `0 0 ${chartW} ${chartH}`);
+      svg.style.width = `${chartW}px`;
+      svg.style.height = `${chartH}px`;
+
+      let tooltipEl = document.getElementById('utilizationTooltip');
+      if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'utilizationTooltip';
+        tooltipEl.className = 'chart-tooltip';
+        tooltipEl.style.position = 'fixed';
+        document.body.appendChild(tooltipEl);
+      }
+
+      let hoverGuide = document.getElementById('utilizationHoverGuide');
+      if (!hoverGuide) {
+        hoverGuide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        hoverGuide.id = 'utilizationHoverGuide';
+      }
+      hoverGuide.setAttribute('y1', String(top));
+      hoverGuide.setAttribute('y2', String(chartH - bottom));
+      hoverGuide.setAttribute('stroke', 'rgba(255,255,255,0.38)');
+      hoverGuide.setAttribute('stroke-width', '1.5');
+      hoverGuide.setAttribute('stroke-dasharray', '5 6');
+      hoverGuide.setAttribute('opacity', utilizationMode === 'cumulative' ? '1' : '0');
+      hoverGuide.style.display = 'none';
+      svg.appendChild(hoverGuide);
+
+      const showTooltip = (evt, dateKey, points, guideX) => {
+        tooltipEl.innerHTML = `
+          <div class="tooltip-title">${formatDateFullLabel(dateKey)}</div>
+          ${points.map(point => `
+            <div class="tooltip-row">
+              <span>${escapeHtml(point.rig)}</span>
+              <strong>${Number.isFinite(utilizationMode === 'daily' ? point.utilization : point.cumulativeUtilization) ? `${(utilizationMode === 'daily' ? point.utilization : point.cumulativeUtilization).toFixed(1)}%` : '—'}</strong>
+            </div>
+            <div class="tooltip-row">
+              <span>Drilling Hr</span>
+              <strong>${point.drillingHours.toFixed(1)} hr</strong>
+            </div>
+          `).join('')}
+        `;
+        tooltipEl.classList.add('visible');
+        const tooltipX = Math.min(window.innerWidth - 260, evt.clientX + 14);
+        const tooltipY = Math.min(window.innerHeight - 220, evt.clientY + 14);
+        tooltipEl.style.left = `${Math.max(8, tooltipX)}px`;
+        tooltipEl.style.top = `${Math.max(8, tooltipY)}px`;
+        if (utilizationMode === 'cumulative') {
+          hoverGuide.setAttribute('x1', String(guideX));
+          hoverGuide.setAttribute('x2', String(guideX));
+          hoverGuide.style.display = 'block';
+        }
+      };
+
+      const hideTooltip = () => {
+        tooltipEl.classList.remove('visible');
+        hoverGuide.style.display = 'none';
+      };
+
+      for (let i = 0; i <= 4; i += 1) {
+        const value = (maxVal / 4) * i;
+        const y = yFor(value);
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', String(left));
+        line.setAttribute('x2', String(chartW - right));
+        line.setAttribute('y1', String(y));
+        line.setAttribute('y2', String(y));
+        line.setAttribute('stroke', 'rgba(255,255,255,0.08)');
+        line.setAttribute('stroke-width', '1');
+        svg.appendChild(line);
+
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', String(left - 10));
+        label.setAttribute('y', String(y + 4));
+        label.setAttribute('text-anchor', 'end');
+        label.setAttribute('fill', 'rgba(244,247,251,0.68)');
+        label.setAttribute('font-size', '12');
+        label.setAttribute('font-weight', '700');
+        label.textContent = `${value.toFixed(0)}%`;
+        svg.appendChild(label);
+      }
+
+      dates.forEach((dateKey, idx) => {
+        const x = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+
+        if (utilizationMode === 'daily') {
+          const separator = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          separator.setAttribute('x1', String(x));
+          separator.setAttribute('x2', String(x));
+          separator.setAttribute('y1', String(top));
+          separator.setAttribute('y2', String(chartH - bottom));
+          separator.setAttribute('stroke', 'rgba(255,255,255,0.12)');
+          separator.setAttribute('stroke-width', '1');
+          separator.setAttribute('stroke-dasharray', '3 8');
+          svg.appendChild(separator);
+        }
+
+        const dateLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        dateLabel.setAttribute('x', String(x));
+        dateLabel.setAttribute('y', String(chartH - 18));
+        dateLabel.setAttribute('text-anchor', 'middle');
+        dateLabel.setAttribute('fill', 'rgba(244,247,251,0.72)');
+        dateLabel.setAttribute('font-size', '12');
+        dateLabel.setAttribute('font-weight', '700');
+        dateLabel.textContent = formatShortDateLabel(dateKey);
+        svg.appendChild(dateLabel);
+
+        const hover = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        hover.setAttribute('x', String(x - Math.max(stepX / 2, 24)));
+        hover.setAttribute('y', String(top));
+        hover.setAttribute('width', String(Math.max(stepX, 48)));
+        hover.setAttribute('height', String(innerH));
+        hover.setAttribute('fill', 'transparent');
+        hover.style.cursor = 'pointer';
+        hover.addEventListener('mousemove', evt => showTooltip(evt, dateKey, series.map(item => item.points[idx]), x));
+        hover.addEventListener('mouseleave', hideTooltip);
+        svg.appendChild(hover);
+      });
+
+      if (utilizationMode === 'daily') {
+        const clusterWidth = Math.max(stepX * 0.72, rigCount * 18 + (rigCount - 1) * 4);
+        const barGap = 4;
+        const barW = Math.max(10, Math.min(18, (clusterWidth - barGap * (rigCount - 1)) / rigCount));
+
+        series.forEach((item, rigIdx) => {
+          item.points.forEach((point, idx) => {
+            const value = point.utilization;
+            if (!Number.isFinite(value)) return;
+            const baseX = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+            const clusterStart = baseX - ((barW * rigCount + barGap * (rigCount - 1)) / 2);
+            const x = clusterStart + rigIdx * (barW + barGap);
+            const y = yFor(value);
+            const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            bar.setAttribute('x', String(x));
+            bar.setAttribute('y', String(y));
+            bar.setAttribute('width', String(barW));
+            bar.setAttribute('height', String(Math.max(0, chartH - bottom - y)));
+            bar.setAttribute('rx', '7');
+            bar.setAttribute('fill', item.color);
+            bar.setAttribute('fill-opacity', '0.86');
+            bar.setAttribute('stroke', 'rgba(255,255,255,0.26)');
+            bar.setAttribute('stroke-width', '1');
+            bar.style.cursor = 'pointer';
+            bar.addEventListener('mousemove', evt => showTooltip(evt, point.date, series.map(seriesItem => seriesItem.points[idx]), baseX));
+            bar.addEventListener('mouseleave', hideTooltip);
+            svg.appendChild(bar);
+
+            const valueLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            valueLabel.setAttribute('x', String(x + barW / 2));
+            valueLabel.setAttribute('y', String(Math.max(top + 14, y - 10)));
+            valueLabel.setAttribute('text-anchor', 'middle');
+            valueLabel.setAttribute('fill', 'rgba(244,247,251,0.92)');
+            valueLabel.setAttribute('font-size', '11');
+            valueLabel.setAttribute('font-weight', '800');
+            valueLabel.textContent = `${value.toFixed(0)}%`;
+            valueLabel.style.pointerEvents = 'none';
+            svg.appendChild(valueLabel);
+          });
+        });
+      } else {
+        series.forEach(item => {
+          const pathParts = [];
+          let started = false;
+          item.points.forEach((point, idx) => {
+            const value = point.cumulativeUtilization;
+            if (!Number.isFinite(value)) return;
+            const x = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+            const y = yFor(value);
+            pathParts.push(`${started ? 'L' : 'M'} ${x} ${y}`);
+            started = true;
+          });
+          if (!pathParts.length) return;
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', pathParts.join(' '));
+          path.setAttribute('fill', 'none');
+          path.setAttribute('stroke', item.color);
+          path.setAttribute('stroke-width', '3');
+          path.setAttribute('stroke-linecap', 'round');
+          path.setAttribute('stroke-linejoin', 'round');
+          path.setAttribute('opacity', '0.96');
+          svg.appendChild(path);
+
+          item.points.forEach((point, idx) => {
+            const value = point.cumulativeUtilization;
+            if (!Number.isFinite(value)) return;
+            const x = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+            const y = yFor(value);
+            const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            dot.setAttribute('cx', String(x));
+            dot.setAttribute('cy', String(y));
+            dot.setAttribute('r', '4.8');
+            dot.setAttribute('fill', item.color);
+            dot.setAttribute('stroke', 'rgba(255,255,255,0.9)');
+            dot.setAttribute('stroke-width', '1.6');
+            dot.style.cursor = 'pointer';
+            dot.addEventListener('mousemove', evt => showTooltip(evt, point.date, series.map(seriesItem => seriesItem.points[idx]), x));
+            dot.addEventListener('mouseleave', hideTooltip);
+            svg.appendChild(dot);
+
+            const valueLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            valueLabel.setAttribute('x', String(x));
+            valueLabel.setAttribute('y', String(Math.max(top + 14, y - 12)));
+            valueLabel.setAttribute('text-anchor', 'middle');
+            valueLabel.setAttribute('fill', 'rgba(244,247,251,0.92)');
+            valueLabel.setAttribute('font-size', '11');
+            valueLabel.setAttribute('font-weight', '800');
+            valueLabel.textContent = `${value.toFixed(0)}%`;
+            valueLabel.style.pointerEvents = 'none';
+            svg.appendChild(valueLabel);
+          });
+        });
+      }
+
+      svg.onmouseleave = hideTooltip;
+
+      if (els.utilizationChartWrap) {
+        if (!els.utilizationChartWrap.dataset.wheelBound) {
+          els.utilizationChartWrap.addEventListener('wheel', evt => {
+            const wrap = els.utilizationChartWrap;
+            if (!wrap) return;
+            const canScrollX = wrap.scrollWidth > wrap.clientWidth + 4;
+            if (!canScrollX) return;
+            const delta = Math.abs(evt.deltaY) > Math.abs(evt.deltaX) ? evt.deltaY : evt.deltaX;
+            if (!delta) return;
+            evt.preventDefault();
+            wrap.scrollLeft += delta;
+          }, { passive: false });
+          els.utilizationChartWrap.dataset.wheelBound = 'true';
+        }
+
+        requestAnimationFrame(() => {
+          const hasOverflow = els.utilizationChartWrap.scrollWidth > els.utilizationChartWrap.clientWidth + 4;
+          els.utilizationChartWrap.scrollLeft = hasOverflow
+            ? Math.max(0, els.utilizationChartWrap.scrollWidth - els.utilizationChartWrap.clientWidth)
+            : 0;
+        });
+      }
+    }
+
+    function renderUtilizationPage(project) {
+      const rows = getUtilizationRows(project);
+      const dayGroups = getUtilizationDayGroups(rows);
+      const { colors } = buildUtilizationSeries(rows, utilizationMode);
+
+      if (els.utilizationTableBody) {
+        if (!rows.length) {
+          els.utilizationTableBody.innerHTML = '<tr><td colspan="6" class="utilization-empty">No utilization data available for current scope.</td></tr>';
+        } else {
+          els.utilizationTableBody.innerHTML = dayGroups.map(group => group.items.map((row, idx) => {
+            const utilClass = row.utilization >= 75 ? 'utilization-high' : (row.utilization >= 45 ? 'utilization-mid' : 'utilization-low');
+            const totalClass = group.totalUtilization >= 75 ? 'utilization-high' : (group.totalUtilization >= 45 ? 'utilization-mid' : 'utilization-low');
+            const rigColor = colors[row.rig] || '#8ef0bf';
+            return `
+              <tr class="${idx === 0 ? 'utilization-group-start' : ''}">
+                ${idx === 0 ? `<td rowspan="${group.items.length}" class="utilization-date-cell">${formatDateFullLabel(group.date)}</td>` : ''}
+                <td>
+                  <span class="utilization-rig-chip">
+                    <span class="utilization-rig-dot" style="background:${rigColor};"></span>
+                    ${escapeHtml(row.rig)}
+                  </span>
+                </td>
+                <td class="num">${row.drillingHours.toFixed(1)}</td>
+                <td class="num">${row.shiftHours.toFixed(1)}</td>
+                <td class="num ${utilClass}">${row.utilization.toFixed(1)}%</td>
+                ${idx === 0 ? `<td rowspan="${group.items.length}" class="num ${totalClass} utilization-total-cell">${group.totalUtilization.toFixed(1)}%</td>` : ''}
+              </tr>
+            `;
+          }).join('')).join('');
+        }
+      }
+
+      renderUtilizationChart(rows);
+    }
+
     function renderManpowerPage(project) {
       const rows = getFilteredManpowerRows(project);
 
@@ -3452,6 +3948,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
             syncTimelinePresetButtons();
             renderDashboard(selectedProject);
             if (activePage === 'production') renderProductionPage(selectedProject, true);
+            if (activePage === 'utilization') renderUtilizationPage(selectedProject);
             if (activePage === 'manpower') renderManpowerPage(selectedProject);
             if (activePage === 'timeline') renderTimelinePage(selectedProject, true);
             if (activePage === 'cost') renderCostPage(selectedProject, true);
@@ -3509,11 +4006,12 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           els.overviewDateModeButtons.forEach(b => b.classList.toggle('active', b.dataset.mode === overviewDateMode));
           renderDashboard(selectedProject);
           if (activePage === 'production') renderProductionPage(selectedProject);
+          if (activePage === 'utilization') renderUtilizationPage(selectedProject);
         }));
 
         const dateModeToggle = document.getElementById('overviewDateModeToggle');
         if (dateModeToggle) {
-          dateModeToggle.style.display = (activePage === 'overview' || activePage === 'production') ? 'inline-flex' : 'none';
+          dateModeToggle.style.display = (activePage === 'overview' || activePage === 'production' || activePage === 'utilization') ? 'inline-flex' : 'none';
         }
 
         els.granularityToggleButtons.forEach(btn => btn.addEventListener('click', () => setGranularity(btn.dataset.granularity)));
@@ -3526,6 +4024,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           if (label === 'Overview') btn.addEventListener('click', () => setActivePage('overview'));
           if (label === 'Map') btn.addEventListener('click', () => setActivePage('map'));
           if (label === 'Production') btn.addEventListener('click', () => setActivePage('production'));
+          if (label === 'Utilization') btn.addEventListener('click', () => setActivePage('utilization'));
           if (label === 'Manpower') btn.addEventListener('click', () => setActivePage('manpower'));
           if (label === 'Timeline') btn.addEventListener('click', () => setActivePage('timeline'));
           if (label === 'Cost') btn.addEventListener('click', () => setActivePage('cost'));
@@ -3539,6 +4038,12 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
             .filter(b => b.dataset.prodKey === key)
             .forEach(b => b.classList.toggle('active', b.dataset.group === group));
           renderProductionMetricChart(selectedProject, key, true);
+        }));
+
+        els.utilizationModeButtons.forEach(btn => btn.addEventListener('click', () => {
+          utilizationMode = btn.dataset.utilMode;
+          els.utilizationModeButtons.forEach(b => b.classList.toggle('active', b.dataset.utilMode === utilizationMode));
+          renderUtilizationPage(selectedProject);
         }));
 
         if (hasSession) {

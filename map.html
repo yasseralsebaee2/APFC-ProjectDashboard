@@ -27,7 +27,9 @@
     * { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0; width: 100%; height: 100%;
-      overflow: hidden; font-family: Arial, sans-serif; background: #fff;
+      overflow: hidden; font-family: Arial, sans-serif;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255,244,221,0.95) 0%, rgba(233,241,250,0.82) 32%, rgba(191,208,226,0.42) 56%, rgba(18,24,31,0.92) 100%);
     }
     .header {
       position: absolute; top: 0; left: 0; width: 100%; height: 42px;
@@ -35,7 +37,7 @@
     }
     .header img { height: 24px; width: auto; object-fit: contain; margin-right: 12px; }
     .header-title { color: #fff; font-size: 14px; font-weight: 500; letter-spacing: 0.3px; }
-    #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+    #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.97; }
     .footer {
       display: flex; align-items: center; padding-left: 14px; font-size: 12px; color: #fff;
       font-weight: 500; position: absolute; left: 0; bottom: 0; width: 100%; height: 34px;
@@ -332,7 +334,13 @@
       .chart-area { height: 160px; }
       .chart-metric-label, .chart-legend { font-size: 9px; }
       .chart-metric-value { font-size: 14px; }
-      .view-switcher { top: auto; right: 8px; bottom: calc(270px + env(safe-area-inset-bottom)); transform: none; padding: 4px; gap: 6px; border-radius: 16px; }
+      .right-controls {
+        right: 8px;
+        top: 50%;
+        bottom: auto;
+        transform: translateY(-50%);
+      }
+      .view-switcher { top: auto; right: auto; bottom: auto; transform: none; padding: 4px; gap: 6px; border-radius: 16px; }
       .view-btn { min-width: 52px; padding: 7px 10px; font-size: 10px; }
       .side-panel { top: 46px; right: 8px; left: 8px; width: auto; max-width: none; max-height: calc(100% - 92px); border-radius: 18px; transform: translateY(calc(100% + 16px)); }
       .side-panel.open { transform: translateY(0); }
@@ -1089,18 +1097,30 @@
 
     function normalizeMapScene() {
       try { if (map.getTerrain()) map.setTerrain(null); } catch (err) {}
-      try { map.setFog(null); } catch (err) {}
+    }
+
+    function applyLuxuryAtmosphere() {
+      try {
+        map.setFog({
+          'range': [0.8, 11],
+          'color': isSatellite ? '#edf1f5' : '#dbe7f4',
+          'high-color': isSatellite ? '#d7e1eb' : '#d5e3f1',
+          'horizon-blend': isSatellite ? 0.12 : 0.1,
+          'space-color': isSatellite ? '#95a5b7' : '#8aa0b9',
+          'star-intensity': 0
+        });
+      } catch (err) {}
     }
 
     function applyBasemapConfig() {
       try {
         if (isSatellite) {
-          map.setConfigProperty('basemap', 'show3dObjects', true);
-          map.setConfigProperty('basemap', 'show3dBuildings', true);
-          map.setConfigProperty('basemap', 'show3dLandmarks', true);
-          map.setConfigProperty('basemap', 'show3dFacades', true);
-          map.setConfigProperty('basemap', 'showRoadsAndTransit', false);
-          map.setConfigProperty('basemap', 'showPedestrianRoads', false);
+          map.setConfigProperty('basemap', 'showRoadsAndTransit', true);
+          map.setConfigProperty('basemap', 'showPedestrianRoads', true);
+          map.setConfigProperty('basemap', 'showPlaceLabels', true);
+          map.setConfigProperty('basemap', 'showPointOfInterestLabels', true);
+          map.setConfigProperty('basemap', 'showRoadLabels', true);
+          map.setConfigProperty('basemap', 'showTransitLabels', true);
           map.setConfigProperty('basemap', 'lightPreset', 'day');
         } else {
           map.setConfigProperty('basemap', 'show3dObjects', true);
@@ -1110,6 +1130,7 @@
           map.setConfigProperty('basemap', 'lightPreset', 'day');
         }
       } catch (err) {}
+      applyLuxuryAtmosphere();
     }
 
     function keepCustomLayersOnTop() {
@@ -1144,7 +1165,7 @@
           filter: ['==', ['geometry-type'], 'Polygon'],
           minzoom: 10,
           paint: {
-            'fill-extrusion-color': '#e7d7af',
+            'fill-extrusion-color': '#ece7de',
             'fill-extrusion-height': [
               'interpolate',
               ['linear'],
@@ -1172,7 +1193,12 @@
                 0
               ]
             ],
-            'fill-extrusion-opacity': 0.96
+            'fill-extrusion-opacity': 0.88,
+            'fill-extrusion-vertical-gradient': true,
+            'fill-extrusion-emissive-strength': 0.04,
+            'fill-extrusion-ambient-occlusion-intensity': 0.34,
+            'fill-extrusion-flood-light-color': '#fffaf1',
+            'fill-extrusion-flood-light-intensity': 0.1
           }
         }, beforeLayerId);
       } catch (err) {

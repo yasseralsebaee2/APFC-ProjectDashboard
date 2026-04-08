@@ -1850,6 +1850,10 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         els.refreshDashboardBtn.textContent = 'Refreshing...';
       }
       try {
+        if (typeof window.refreshAppToLatestBuild === 'function') {
+          await window.refreshAppToLatestBuild();
+          return;
+        }
         await loadDashboardData();
       } catch (err) {
         console.error(err);

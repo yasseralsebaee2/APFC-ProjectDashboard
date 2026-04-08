@@ -545,6 +545,40 @@
       await Promise.all(cacheNames.map(name => caches.delete(name)));
     }
 
+    async function refreshAppToLatestBuild() {
+      if (isLocalPreviewHost) {
+        window.location.reload();
+        return;
+      }
+
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(async reg => {
+            try {
+              await reg.update();
+              if (reg.waiting) {
+                activateWaitingServiceWorker(reg);
+              }
+            } catch (err) {
+              console.error('SW refresh update failed:', err);
+            }
+          }));
+        }
+
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames.map(name => caches.delete(name)));
+        }
+      } finally {
+        const url = new URL(window.location.href);
+        url.searchParams.set('refresh', Date.now().toString());
+        window.location.replace(url.toString());
+      }
+    }
+
+    window.refreshAppToLatestBuild = refreshAppToLatestBuild;
+
     function activateWaitingServiceWorker(registration) {
       if (registration.waiting) {
         registration.waiting.postMessage({ type: 'SKIP_WAITING' });

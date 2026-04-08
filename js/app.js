@@ -104,6 +104,8 @@ const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/re
       utilizationTableBody: document.getElementById('utilizationTableBody'),
       utilizationSvg: document.getElementById('utilizationSvg'),
       utilizationChartTag: document.getElementById('utilizationChartTag'),
+      utilizationUtilTicks: document.getElementById('utilizationUtilTicks'),
+      utilizationLmTicks: document.getElementById('utilizationLmTicks'),
       utilizationLegend: document.getElementById('utilizationLegend'),
       utilizationChartWrap: document.getElementById('utilizationChartWrap'),
       projectMapFrame: document.getElementById('projectMapFrame'),
@@ -3409,11 +3411,13 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         const rig = getRigNameForUtilization(row);
         if (!dateKey || !rig) return;
         const drillingHours = getDrillingHoursForUtilization(row);
+        const drilledLm = Number.isFinite(Number(row?.asbuilt_depth)) ? Number(row.asbuilt_depth) : 0;
         const key = `${dateKey}__${rig}`;
         if (!grouped.has(key)) {
-          grouped.set(key, { date: dateKey, rig, drillingHours: 0, shiftHours: 12 });
+          grouped.set(key, { date: dateKey, rig, drillingHours: 0, drilledLm: 0, shiftHours: 12 });
         }
         grouped.get(key).drillingHours += drillingHours;
+        grouped.get(key).drilledLm += drilledLm;
       });
 
       return Array.from(grouped.values())
@@ -3439,9 +3443,10 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         let cumulativeHours = 0;
         let activeShiftDays = 0;
         let mobilized = false;
-        const points = dates.map((dateKey, idx) => {
+        const points = dates.map((dateKey) => {
           const row = byRigDate.get(`${rig}__${dateKey}`);
           const drillingHours = row ? row.drillingHours : 0;
+          const drilledLm = row ? row.drilledLm : 0;
           const dailyUtilization = row ? row.utilization : 0;
           if (row) mobilized = true;
           if (mobilized) activeShiftDays += 1;
@@ -3453,10 +3458,18 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
             date: dateKey,
             rig,
             drillingHours,
+            cumulativeHours,
+            drilledLm,
             utilization: dailyUtilization,
             cumulativeUtilization,
+            cumulativeLm: drilledLm,
             mobilized
           };
+        });
+        let runningLm = 0;
+        points.forEach(point => {
+          runningLm += point.drilledLm;
+          point.cumulativeLm = runningLm;
         });
         return {
           rig,
@@ -3501,6 +3514,61 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         });
     }
 
+    function getUtilizationChartLayout(wrapEl, dates, rigCount, mode, chartH, options = {}) {
+      const left = options.left ?? 78;
+      const right = options.right ?? 24;
+      const top = options.top ?? 18;
+      const bottom = options.bottom ?? 72;
+      const overflowThreshold = options.overflowThreshold ?? (mode === 'daily' ? 8 : 10);
+      const minDaySpan = mode === 'daily'
+        ? Math.max(options.minDailySpan ?? 58, rigCount * (options.dailyRigFactor ?? 16) + (rigCount - 1) * (options.dailyGapFactor ?? 4))
+        : (options.cumulativeSpan ?? 72);
+      const minWrapWidth = options.minWrapWidth ?? 760;
+      const wrapWidth = Math.max((wrapEl?.clientWidth || 0) - 4, minWrapWidth);
+      const requiredChartW = left + right + (dates.length * minDaySpan);
+      const shouldOverflow = dates.length > overflowThreshold && requiredChartW > wrapWidth;
+      const chartW = shouldOverflow ? Math.max(wrapWidth, requiredChartW) : wrapWidth;
+      const innerW = chartW - left - right;
+      const innerH = chartH - top - bottom;
+      const plotSidePad = mode === 'daily'
+        ? (options.dailyPlotSidePad ?? 26)
+        : (options.cumulativePlotSidePad ?? 14);
+      const effectiveW = Math.max(innerW - plotSidePad * 2, 1);
+      const stepX = dates.length > 1 ? effectiveW / (dates.length - 1) : 0;
+      return { chartW, chartH, left, right, top, bottom, innerW, innerH, plotSidePad, stepX, shouldOverflow };
+    }
+
+    function bindUtilizationChartScrolls() {
+      const primary = els.utilizationChartWrap;
+      const secondary = els.utilizationLmChartWrap;
+      if (!primary || !secondary || primary.dataset.syncBound) return;
+
+      let syncing = false;
+      const syncScroll = (source, target) => {
+        if (syncing) return;
+        syncing = true;
+        target.scrollLeft = source.scrollLeft;
+        requestAnimationFrame(() => { syncing = false; });
+      };
+
+      primary.addEventListener('scroll', () => syncScroll(primary, secondary));
+      secondary.addEventListener('scroll', () => syncScroll(secondary, primary));
+
+      const wheelScroll = (evt) => {
+        const canScrollX = primary.scrollWidth > primary.clientWidth + 4;
+        if (!canScrollX) return;
+        const delta = Math.abs(evt.deltaY) > Math.abs(evt.deltaX) ? evt.deltaY : evt.deltaX;
+        if (!delta) return;
+        evt.preventDefault();
+        primary.scrollLeft += delta;
+        secondary.scrollLeft = primary.scrollLeft;
+      };
+
+      primary.addEventListener('wheel', wheelScroll, { passive: false });
+      secondary.addEventListener('wheel', wheelScroll, { passive: false });
+      primary.dataset.syncBound = 'true';
+    }
+
     function renderUtilizationChart(rows) {
       const svg = els.utilizationSvg;
       if (!svg) return;
@@ -3525,29 +3593,13 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         return;
       }
 
-      const chartH = 330;
-      const left = 78;
-      const right = 24;
-      const top = 18;
-      const bottom = 72;
       const rigCount = Math.max(series.length, 1);
-      const overflowThreshold = utilizationMode === 'daily' ? 8 : 10;
-      const minDaySpan = utilizationMode === 'daily'
-        ? Math.max(58, rigCount * 16 + (rigCount - 1) * 4)
-        : 72;
-      const wrapWidth = Math.max((els.utilizationChartWrap?.clientWidth || 0) - 4, 760);
-      const requiredChartW = left + right + (dates.length * minDaySpan);
-      const shouldOverflow = dates.length > overflowThreshold && requiredChartW > wrapWidth;
-      const chartW = shouldOverflow ? Math.max(wrapWidth, requiredChartW) : wrapWidth;
-      const innerW = chartW - left - right;
-      const innerH = chartH - top - bottom;
-      const plotSidePad = utilizationMode === 'daily' ? 26 : 14;
-      const effectiveW = Math.max(innerW - plotSidePad * 2, 1);
+      const layout = getUtilizationChartLayout(els.utilizationChartWrap, dates, rigCount, utilizationMode, 330);
+      const { chartW, chartH, left, right, top, bottom, innerW, innerH, plotSidePad, stepX } = layout;
       const maxVal = Math.max(100, ...series.flatMap(item => item.points
         .map(point => (utilizationMode === 'daily' ? point.utilization : point.cumulativeUtilization))
         .filter(value => Number.isFinite(value))));
       const yFor = value => top + innerH - (Math.max(0, value) / maxVal) * innerH;
-      const stepX = dates.length > 1 ? effectiveW / (dates.length - 1) : 0;
 
       svg.setAttribute('viewBox', `0 0 ${chartW} ${chartH}`);
       svg.style.width = `${chartW}px`;
@@ -3764,20 +3816,626 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       svg.onmouseleave = hideTooltip;
 
       if (els.utilizationChartWrap) {
-        if (!els.utilizationChartWrap.dataset.wheelBound) {
-          els.utilizationChartWrap.addEventListener('wheel', evt => {
-            const wrap = els.utilizationChartWrap;
-            if (!wrap) return;
-            const canScrollX = wrap.scrollWidth > wrap.clientWidth + 4;
-            if (!canScrollX) return;
-            const delta = Math.abs(evt.deltaY) > Math.abs(evt.deltaX) ? evt.deltaY : evt.deltaX;
-            if (!delta) return;
-            evt.preventDefault();
-            wrap.scrollLeft += delta;
-          }, { passive: false });
-          els.utilizationChartWrap.dataset.wheelBound = 'true';
+        bindUtilizationChartScrolls();
+        requestAnimationFrame(() => {
+          const hasOverflow = els.utilizationChartWrap.scrollWidth > els.utilizationChartWrap.clientWidth + 4;
+          els.utilizationChartWrap.scrollLeft = hasOverflow
+            ? Math.max(0, els.utilizationChartWrap.scrollWidth - els.utilizationChartWrap.clientWidth)
+            : 0;
+          if (els.utilizationLmChartWrap) {
+            els.utilizationLmChartWrap.scrollLeft = els.utilizationChartWrap.scrollLeft;
+          }
+        });
+      }
+    }
+
+    function renderUtilizationLmChart(rows) {
+      const svg = els.utilizationLmSvg;
+      if (!svg) return;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      const { dates, series } = buildUtilizationSeries(rows, utilizationMode);
+      if (els.utilizationLmChartTag) {
+        els.utilizationLmChartTag.textContent = utilizationMode === 'daily' ? 'Daily' : 'Cumulative';
+      }
+      if (!dates.length || !series.length) {
+        const empty = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        empty.setAttribute('x', '500');
+        empty.setAttribute('y', '130');
+        empty.setAttribute('text-anchor', 'middle');
+        empty.setAttribute('fill', 'rgba(244,247,251,0.56)');
+        empty.setAttribute('font-size', '12');
+        empty.setAttribute('font-weight', '700');
+        empty.textContent = 'No drilled Lm data available';
+        svg.appendChild(empty);
+        return;
+      }
+
+      const rigCount = Math.max(series.length, 1);
+      const layout = getUtilizationChartLayout(els.utilizationLmChartWrap, dates, rigCount, utilizationMode, 250, {
+        left: 62,
+        right: 20,
+        top: 16,
+        bottom: 56,
+        dailyPlotSidePad: 18,
+        cumulativePlotSidePad: 12
+      });
+      const { chartW, chartH, left, right, top, bottom, innerW, innerH, plotSidePad, stepX } = layout;
+      const maxVal = Math.max(1, ...series.flatMap(item => item.points.map(point => (
+        utilizationMode === 'daily' ? point.drilledLm : point.cumulativeLm
+      ))));
+      const yFor = value => top + innerH - (Math.max(0, value) / maxVal) * innerH;
+
+      svg.setAttribute('viewBox', `0 0 ${chartW} ${chartH}`);
+      svg.style.width = `${chartW}px`;
+      svg.style.height = `${chartH}px`;
+
+      let tooltipEl = document.getElementById('utilizationLmTooltip');
+      if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'utilizationLmTooltip';
+        tooltipEl.className = 'chart-tooltip';
+        tooltipEl.style.position = 'fixed';
+        document.body.appendChild(tooltipEl);
+      }
+
+      let hoverGuide = document.getElementById('utilizationLmHoverGuide');
+      if (!hoverGuide) {
+        hoverGuide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        hoverGuide.id = 'utilizationLmHoverGuide';
+      }
+      hoverGuide.setAttribute('y1', String(top));
+      hoverGuide.setAttribute('y2', String(chartH - bottom));
+      hoverGuide.setAttribute('stroke', 'rgba(255,255,255,0.28)');
+      hoverGuide.setAttribute('stroke-width', '1.2');
+      hoverGuide.setAttribute('stroke-dasharray', '5 6');
+      hoverGuide.style.display = 'none';
+      svg.appendChild(hoverGuide);
+
+      const showTooltip = (evt, dateKey, points, guideX) => {
+        tooltipEl.innerHTML = `
+          <div class="tooltip-title">${formatDateFullLabel(dateKey)}</div>
+          ${points.map(point => `
+            <div class="tooltip-row">
+              <span>${escapeHtml(point.rig)}</span>
+              <strong>${(utilizationMode === 'daily' ? point.drilledLm : point.cumulativeLm).toFixed(1)} Lm</strong>
+            </div>
+          `).join('')}
+        `;
+        tooltipEl.classList.add('visible');
+        const tooltipX = Math.min(window.innerWidth - 260, evt.clientX + 14);
+        const tooltipY = Math.min(window.innerHeight - 220, evt.clientY + 14);
+        tooltipEl.style.left = `${Math.max(8, tooltipX)}px`;
+        tooltipEl.style.top = `${Math.max(8, tooltipY)}px`;
+        hoverGuide.setAttribute('x1', String(guideX));
+        hoverGuide.setAttribute('x2', String(guideX));
+        hoverGuide.style.display = 'block';
+      };
+
+      const hideTooltip = () => {
+        tooltipEl.classList.remove('visible');
+        hoverGuide.style.display = 'none';
+      };
+
+      for (let i = 0; i <= 4; i += 1) {
+        const value = (maxVal / 4) * i;
+        const y = yFor(value);
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', String(left));
+        line.setAttribute('x2', String(chartW - right));
+        line.setAttribute('y1', String(y));
+        line.setAttribute('y2', String(y));
+        line.setAttribute('stroke', 'rgba(255,255,255,0.07)');
+        line.setAttribute('stroke-width', '1');
+        svg.appendChild(line);
+
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', String(left - 8));
+        label.setAttribute('y', String(y + 4));
+        label.setAttribute('text-anchor', 'end');
+        label.setAttribute('fill', 'rgba(244,247,251,0.62)');
+        label.setAttribute('font-size', '11');
+        label.setAttribute('font-weight', '700');
+        label.textContent = `${value.toFixed(0)}`;
+        svg.appendChild(label);
+      }
+
+      dates.forEach((dateKey, idx) => {
+        const x = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+        const dateLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        dateLabel.setAttribute('x', String(x));
+        dateLabel.setAttribute('y', String(chartH - 16));
+        dateLabel.setAttribute('text-anchor', 'middle');
+        dateLabel.setAttribute('fill', 'rgba(244,247,251,0.68)');
+        dateLabel.setAttribute('font-size', '11');
+        dateLabel.setAttribute('font-weight', '700');
+        dateLabel.textContent = formatShortDateLabel(dateKey);
+        svg.appendChild(dateLabel);
+
+        const hover = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        hover.setAttribute('x', String(x - Math.max(stepX / 2, 22)));
+        hover.setAttribute('y', String(top));
+        hover.setAttribute('width', String(Math.max(stepX, 44)));
+        hover.setAttribute('height', String(innerH));
+        hover.setAttribute('fill', 'transparent');
+        hover.style.cursor = 'pointer';
+        hover.addEventListener('mousemove', evt => showTooltip(evt, dateKey, series.map(item => item.points[idx]), x));
+        hover.addEventListener('mouseleave', hideTooltip);
+        svg.appendChild(hover);
+      });
+
+      if (utilizationMode === 'daily') {
+        const clusterWidth = Math.max(stepX * 0.72, rigCount * 18 + (rigCount - 1) * 4);
+        const barGap = 4;
+        const barW = Math.max(10, Math.min(18, (clusterWidth - barGap * (rigCount - 1)) / rigCount));
+
+        series.forEach((item, rigIdx) => {
+          item.points.forEach((point, idx) => {
+            const value = point.drilledLm;
+            const baseX = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+            const clusterStart = baseX - ((barW * rigCount + barGap * (rigCount - 1)) / 2);
+            const x = clusterStart + rigIdx * (barW + barGap);
+            const y = yFor(value);
+            const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            bar.setAttribute('x', String(x));
+            bar.setAttribute('y', String(y));
+            bar.setAttribute('width', String(barW));
+            bar.setAttribute('height', String(Math.max(0, chartH - bottom - y)));
+            bar.setAttribute('rx', '7');
+            bar.setAttribute('fill', item.color);
+            bar.setAttribute('fill-opacity', '0.82');
+            bar.setAttribute('stroke', 'rgba(255,255,255,0.2)');
+            bar.setAttribute('stroke-width', '1');
+            bar.style.cursor = 'pointer';
+            bar.addEventListener('mousemove', evt => showTooltip(evt, point.date, series.map(seriesItem => seriesItem.points[idx]), baseX));
+            bar.addEventListener('mouseleave', hideTooltip);
+            svg.appendChild(bar);
+
+            const valueLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            valueLabel.setAttribute('x', String(x + barW / 2));
+            valueLabel.setAttribute('y', String(Math.max(top + 12, y - 8)));
+            valueLabel.setAttribute('text-anchor', 'middle');
+            valueLabel.setAttribute('fill', 'rgba(244,247,251,0.9)');
+            valueLabel.setAttribute('font-size', '10');
+            valueLabel.setAttribute('font-weight', '800');
+            valueLabel.textContent = `${value.toFixed(1)}`;
+            valueLabel.style.pointerEvents = 'none';
+            svg.appendChild(valueLabel);
+          });
+        });
+      } else {
+        series.forEach(item => {
+          const pathParts = [];
+          item.points.forEach((point, idx) => {
+            const value = point.cumulativeLm;
+            const x = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+            const y = yFor(value);
+            pathParts.push(`${idx === 0 ? 'M' : 'L'} ${x} ${y}`);
+          });
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', pathParts.join(' '));
+          path.setAttribute('fill', 'none');
+          path.setAttribute('stroke', item.color);
+          path.setAttribute('stroke-width', '2.6');
+          path.setAttribute('stroke-linecap', 'round');
+          path.setAttribute('stroke-linejoin', 'round');
+          path.setAttribute('opacity', '0.95');
+          svg.appendChild(path);
+
+          item.points.forEach((point, idx) => {
+            const value = point.cumulativeLm;
+            const x = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+            const y = yFor(value);
+            const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            dot.setAttribute('cx', String(x));
+            dot.setAttribute('cy', String(y));
+            dot.setAttribute('r', '4.2');
+            dot.setAttribute('fill', item.color);
+            dot.setAttribute('stroke', 'rgba(255,255,255,0.88)');
+            dot.setAttribute('stroke-width', '1.4');
+            dot.style.cursor = 'pointer';
+            dot.addEventListener('mousemove', evt => showTooltip(evt, point.date, series.map(seriesItem => seriesItem.points[idx]), x));
+            dot.addEventListener('mouseleave', hideTooltip);
+            svg.appendChild(dot);
+          });
+        });
+      }
+
+      svg.onmouseleave = hideTooltip;
+
+      if (els.utilizationLmChartWrap) {
+        bindUtilizationChartScrolls();
+        requestAnimationFrame(() => {
+          els.utilizationLmChartWrap.scrollLeft = els.utilizationChartWrap?.scrollLeft || 0;
+        });
+      }
+    }
+
+    function bindUtilizationUnifiedScroll() {
+      const wrap = els.utilizationChartWrap;
+      if (!wrap || wrap.dataset.unifiedScrollBound) return;
+      wrap.addEventListener('wheel', evt => {
+        const canScrollX = wrap.scrollWidth > wrap.clientWidth + 4;
+        if (!canScrollX) return;
+        const delta = Math.abs(evt.deltaY) > Math.abs(evt.deltaX) ? evt.deltaY : evt.deltaX;
+        if (!delta) return;
+        evt.preventDefault();
+        wrap.scrollLeft += delta;
+      }, { passive: false });
+      wrap.dataset.unifiedScrollBound = 'true';
+    }
+
+    function renderUtilizationCombinedChart(rows) {
+      const svg = els.utilizationSvg;
+      if (!svg) return;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      const { dates, series } = buildUtilizationSeries(rows, utilizationMode);
+      renderUtilizationLegend(series);
+      if (els.utilizationChartTag) {
+        els.utilizationChartTag.textContent = utilizationMode === 'daily' ? 'Daily' : 'Cumulative';
+      }
+
+      if (!dates.length || !series.length) {
+        const empty = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        empty.setAttribute('x', '500');
+        empty.setAttribute('y', '250');
+        empty.setAttribute('text-anchor', 'middle');
+        empty.setAttribute('fill', 'rgba(244,247,251,0.62)');
+        empty.setAttribute('font-size', '14');
+        empty.setAttribute('font-weight', '700');
+        empty.textContent = 'No rig performance data available';
+        svg.appendChild(empty);
+        return;
+      }
+
+      const rigCount = Math.max(series.length, 1);
+      const layout = getUtilizationChartLayout(els.utilizationChartWrap, dates, rigCount, utilizationMode, 560, {
+        left: 84,
+        right: 20,
+        top: 28,
+        bottom: 72,
+        minWrapWidth: 0,
+        overflowThreshold: utilizationMode === 'daily' ? 8 : 10,
+        minDailySpan: 50,
+        dailyRigFactor: 13,
+        dailyGapFactor: 3,
+        dailyPlotSidePad: 28,
+        cumulativeSpan: 60,
+        cumulativePlotSidePad: 18
+      });
+      const { chartW, chartH, left, right, top, bottom, innerW, plotSidePad, stepX } = layout;
+      const dividerY = 316;
+      const topArea = { y1: top, y2: 280 };
+      const bottomArea = { y1: dividerY + 30, y2: chartH - bottom };
+      const topHeight = topArea.y2 - topArea.y1;
+      const bottomHeight = bottomArea.y2 - bottomArea.y1;
+      const utilMax = Math.max(100, ...series.flatMap(item => item.points.map(point => utilizationMode === 'daily' ? point.utilization : point.cumulativeUtilization).filter(Number.isFinite)));
+      const lmMax = Math.max(1, ...series.flatMap(item => item.points.map(point => utilizationMode === 'daily' ? point.drilledLm : point.cumulativeLm).filter(Number.isFinite)));
+      const yForUtil = value => topArea.y1 + topHeight - (Math.max(0, value) / utilMax) * topHeight;
+      const yForLm = value => bottomArea.y1 + bottomHeight - (Math.max(0, value) / lmMax) * bottomHeight;
+      if (els.utilizationUtilTicks) {
+        els.utilizationUtilTicks.innerHTML = Array.from({ length: 5 }, (_, i) => {
+          const value = (utilMax / 4) * (4 - i);
+          const pct = (i / 4) * 100;
+          return `<div class="utilization-axis-tick" style="top:${pct}%">${value.toFixed(0)}%</div>`;
+        }).join('');
+      }
+      if (els.utilizationLmTicks) {
+        els.utilizationLmTicks.innerHTML = Array.from({ length: 5 }, (_, i) => {
+          const value = (lmMax / 4) * (4 - i);
+          const pct = (i / 4) * 100;
+          return `<div class="utilization-axis-tick" style="top:${pct}%">${value.toFixed(0)} m</div>`;
+        }).join('');
+      }
+
+      svg.setAttribute('viewBox', `0 0 ${chartW} ${chartH}`);
+      svg.style.width = `${chartW}px`;
+      svg.style.height = `${chartH}px`;
+
+      let tooltipEl = document.getElementById('utilizationTooltip');
+      if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'utilizationTooltip';
+        tooltipEl.className = 'chart-tooltip';
+        tooltipEl.style.position = 'fixed';
+        document.body.appendChild(tooltipEl);
+      }
+
+      let hoverGuide = document.getElementById('utilizationHoverGuide');
+      if (!hoverGuide) {
+        hoverGuide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        hoverGuide.id = 'utilizationHoverGuide';
+      }
+      hoverGuide.setAttribute('y1', String(topArea.y1));
+      hoverGuide.setAttribute('y2', String(bottomArea.y2));
+      hoverGuide.setAttribute('stroke', 'rgba(255,255,255,0.32)');
+      hoverGuide.setAttribute('stroke-width', '1.4');
+      hoverGuide.setAttribute('stroke-dasharray', '5 6');
+      hoverGuide.style.display = 'none';
+      svg.appendChild(hoverGuide);
+
+      const formatUtilValue = point => {
+        const value = utilizationMode === 'daily' ? point.utilization : point.cumulativeUtilization;
+        return Number.isFinite(value) && value > 0 ? `${value.toFixed(1)}%` : '-';
+      };
+
+      const formatLmValue = point => {
+        const value = utilizationMode === 'daily' ? point.drilledLm : point.cumulativeLm;
+        return Number.isFinite(value) && value > 0 ? `${value.toFixed(1)} m` : '-';
+      };
+
+      const formatHoursValue = point => {
+        const value = utilizationMode === 'daily' ? point.drillingHours : point.cumulativeHours;
+        return Number.isFinite(value) && value > 0 ? `${value.toFixed(1)} hr` : '-';
+      };
+      const pointsForIndex = idx => series.map(item => ({ ...item.points[idx], color: item.color }));
+
+      const showTooltip = (evt, dateKey, points, guideX) => {
+        tooltipEl.innerHTML = `
+          <div class="tooltip-title">${formatDateFullLabel(dateKey)}</div>
+          ${points.map(point => `
+            <div class="tooltip-row"><span style="color:${point.color}; font-weight:800;">${escapeHtml(point.rig)}</span><strong style="color:${point.color};">${formatUtilValue(point)}</strong></div>
+            <div class="tooltip-row"><span style="color:${point.color};">Drilled Lm</span><strong style="color:${point.color};">${formatLmValue(point)}</strong></div>
+            <div class="tooltip-row"><span style="color:${point.color};">Drilling Hr</span><strong style="color:${point.color};">${formatHoursValue(point)}</strong></div>
+          `).join('')}
+        `;
+        tooltipEl.classList.add('visible');
+        const tooltipX = Math.min(window.innerWidth - 260, evt.clientX + 14);
+        const tooltipY = Math.min(window.innerHeight - 220, evt.clientY + 14);
+        tooltipEl.style.left = `${Math.max(8, tooltipX)}px`;
+        tooltipEl.style.top = `${Math.max(8, tooltipY)}px`;
+        hoverGuide.setAttribute('x1', String(guideX));
+        hoverGuide.setAttribute('x2', String(guideX));
+        hoverGuide.style.display = 'block';
+      };
+
+      const hideTooltip = () => {
+        tooltipEl.classList.remove('visible');
+        hoverGuide.style.display = 'none';
+      };
+
+      const addGrid = (maxValue, yFor, suffix, areaBottom, fontSize) => {
+        for (let i = 0; i <= 4; i += 1) {
+          const value = (maxValue / 4) * i;
+          const y = yFor(value);
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', String(left));
+          line.setAttribute('x2', String(chartW - right));
+          line.setAttribute('y1', String(y));
+          line.setAttribute('y2', String(y));
+          line.setAttribute('stroke', 'rgba(255,255,255,0.08)');
+          line.setAttribute('stroke-width', '1');
+          svg.appendChild(line);
+
+        }
+      };
+
+      addGrid(utilMax, yForUtil, '%', topArea.y2, 12);
+      addGrid(lmMax, yForLm, '', bottomArea.y2, 11);
+
+      const divider = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      divider.setAttribute('x1', String(left));
+      divider.setAttribute('x2', String(chartW - right));
+        divider.setAttribute('y1', String(dividerY));
+        divider.setAttribute('y2', String(dividerY));
+      divider.setAttribute('stroke', 'rgba(255,255,255,0.14)');
+      divider.setAttribute('stroke-width', '1');
+      divider.setAttribute('stroke-dasharray', '4 6');
+      svg.appendChild(divider);
+
+      dates.forEach((dateKey, idx) => {
+        const x = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+
+        if (utilizationMode === 'daily' && idx < dates.length - 1) {
+          const separatorX = x + stepX / 2;
+          const separator = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          separator.setAttribute('x1', String(separatorX));
+          separator.setAttribute('x2', String(separatorX));
+          separator.setAttribute('y1', String(topArea.y1));
+          separator.setAttribute('y2', String(bottomArea.y2));
+          separator.setAttribute('stroke', 'rgba(255,255,255,0.18)');
+          separator.setAttribute('stroke-width', '1');
+          separator.setAttribute('stroke-dasharray', '4 8');
+          svg.appendChild(separator);
         }
 
+        const dateLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        dateLabel.setAttribute('x', String(x));
+        dateLabel.setAttribute('y', String(chartH - 18));
+        dateLabel.setAttribute('text-anchor', 'middle');
+        dateLabel.setAttribute('fill', 'rgba(244,247,251,0.72)');
+        dateLabel.setAttribute('font-size', '9');
+        dateLabel.setAttribute('font-weight', '700');
+        dateLabel.textContent = formatShortDateLabel(dateKey);
+        svg.appendChild(dateLabel);
+
+        const hover = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        hover.setAttribute('x', String(x - Math.max(stepX / 2, 24)));
+        hover.setAttribute('y', String(topArea.y1));
+        hover.setAttribute('width', String(Math.max(stepX, 48)));
+        hover.setAttribute('height', String(bottomArea.y2 - topArea.y1));
+        hover.setAttribute('fill', 'transparent');
+        hover.style.cursor = 'pointer';
+        hover.addEventListener('mousemove', evt => showTooltip(evt, dateKey, pointsForIndex(idx), x));
+        hover.addEventListener('mouseleave', hideTooltip);
+        svg.appendChild(hover);
+      });
+
+      if (utilizationMode === 'daily') {
+        const clusterWidth = Math.max(stepX * 0.64, rigCount * 16 + (rigCount - 1) * 4);
+        const barGap = 4;
+        const barW = Math.max(8, Math.min(15, (clusterWidth - barGap * (rigCount - 1)) / rigCount));
+
+        series.forEach((item, rigIdx) => {
+          item.points.forEach((point, idx) => {
+            const baseX = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+            const clusterStart = baseX - ((barW * rigCount + barGap * (rigCount - 1)) / 2);
+            const x = clusterStart + rigIdx * (barW + barGap);
+
+            const utilValue = point.utilization;
+            if (Number.isFinite(utilValue) && utilValue > 0) {
+              const utilY = yForUtil(utilValue);
+              const utilBar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+              utilBar.setAttribute('x', String(x));
+              utilBar.setAttribute('y', String(utilY));
+              utilBar.setAttribute('width', String(barW));
+              utilBar.setAttribute('height', String(Math.max(0, topArea.y2 - utilY)));
+              utilBar.setAttribute('rx', '5');
+              utilBar.setAttribute('fill', item.color);
+              utilBar.setAttribute('fill-opacity', '0.86');
+              utilBar.setAttribute('stroke', 'rgba(255,255,255,0.22)');
+              utilBar.setAttribute('stroke-width', '1');
+              utilBar.style.cursor = 'pointer';
+              utilBar.addEventListener('mousemove', evt => showTooltip(evt, point.date, pointsForIndex(idx), baseX));
+              utilBar.addEventListener('mouseleave', hideTooltip);
+              svg.appendChild(utilBar);
+
+              const utilLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+              utilLabel.setAttribute('x', String(x + barW / 2));
+              utilLabel.setAttribute('y', String(Math.max(topArea.y1 + 14, utilY - 10)));
+              utilLabel.setAttribute('text-anchor', 'middle');
+              utilLabel.setAttribute('fill', 'rgba(244,247,251,0.92)');
+              utilLabel.setAttribute('font-size', '9');
+              utilLabel.setAttribute('font-weight', '800');
+              utilLabel.textContent = `${utilValue.toFixed(0)}%`;
+              utilLabel.style.pointerEvents = 'none';
+              svg.appendChild(utilLabel);
+            }
+
+            const lmValue = point.drilledLm;
+            if (Number.isFinite(lmValue) && lmValue > 0) {
+              const lmY = yForLm(lmValue);
+              const lmBar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+              lmBar.setAttribute('x', String(x));
+              lmBar.setAttribute('y', String(lmY));
+              lmBar.setAttribute('width', String(barW));
+              lmBar.setAttribute('height', String(Math.max(0, bottomArea.y2 - lmY)));
+              lmBar.setAttribute('rx', '5');
+              lmBar.setAttribute('fill', item.color);
+              lmBar.setAttribute('fill-opacity', '0.78');
+              lmBar.setAttribute('stroke', 'rgba(255,255,255,0.18)');
+              lmBar.setAttribute('stroke-width', '1');
+              lmBar.style.cursor = 'pointer';
+              lmBar.addEventListener('mousemove', evt => showTooltip(evt, point.date, pointsForIndex(idx), baseX));
+              lmBar.addEventListener('mouseleave', hideTooltip);
+              svg.appendChild(lmBar);
+
+              const lmLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+              lmLabel.setAttribute('x', String(x + barW / 2));
+              lmLabel.setAttribute('y', String(Math.max(bottomArea.y1 + 12, lmY - 8)));
+              lmLabel.setAttribute('text-anchor', 'middle');
+              lmLabel.setAttribute('fill', 'rgba(244,247,251,0.88)');
+              lmLabel.setAttribute('font-size', '8');
+              lmLabel.setAttribute('font-weight', '800');
+              lmLabel.textContent = `${Math.round(lmValue)}m`;
+              lmLabel.style.pointerEvents = 'none';
+              svg.appendChild(lmLabel);
+            }
+          });
+        });
+      } else {
+        series.forEach(item => {
+          const utilPathParts = [];
+          const lmPathParts = [];
+          let utilStarted = false;
+          let lmStarted = false;
+
+          item.points.forEach((point, idx) => {
+            const x = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+            const utilValue = point.cumulativeUtilization;
+            if (Number.isFinite(utilValue) && utilValue > 0) {
+              utilPathParts.push(`${utilStarted ? 'L' : 'M'} ${x} ${yForUtil(utilValue)}`);
+              utilStarted = true;
+            }
+            lmPathParts.push(`${lmStarted ? 'L' : 'M'} ${x} ${yForLm(point.cumulativeLm)}`);
+            lmStarted = true;
+          });
+
+          if (utilPathParts.length) {
+            const utilPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            utilPath.setAttribute('d', utilPathParts.join(' '));
+            utilPath.setAttribute('fill', 'none');
+            utilPath.setAttribute('stroke', item.color);
+            utilPath.setAttribute('stroke-width', '3');
+            utilPath.setAttribute('stroke-linecap', 'round');
+            utilPath.setAttribute('stroke-linejoin', 'round');
+            utilPath.setAttribute('opacity', '0.96');
+            svg.appendChild(utilPath);
+          }
+
+          const lmPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          lmPath.setAttribute('d', lmPathParts.join(' '));
+          lmPath.setAttribute('fill', 'none');
+          lmPath.setAttribute('stroke', item.color);
+          lmPath.setAttribute('stroke-width', '2.6');
+          lmPath.setAttribute('stroke-linecap', 'round');
+          lmPath.setAttribute('stroke-linejoin', 'round');
+          lmPath.setAttribute('opacity', '0.95');
+          svg.appendChild(lmPath);
+
+          item.points.forEach((point, idx) => {
+            const x = dates.length === 1 ? left + innerW / 2 : left + plotSidePad + stepX * idx;
+            const utilValue = point.cumulativeUtilization;
+            if (Number.isFinite(utilValue) && utilValue > 0) {
+              const utilY = yForUtil(utilValue);
+              const utilDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+              utilDot.setAttribute('cx', String(x));
+              utilDot.setAttribute('cy', String(utilY));
+              utilDot.setAttribute('r', '4.8');
+              utilDot.setAttribute('fill', item.color);
+              utilDot.setAttribute('stroke', 'rgba(255,255,255,0.9)');
+              utilDot.setAttribute('stroke-width', '1.6');
+              utilDot.style.cursor = 'pointer';
+              utilDot.addEventListener('mousemove', evt => showTooltip(evt, point.date, pointsForIndex(idx), x));
+              utilDot.addEventListener('mouseleave', hideTooltip);
+              svg.appendChild(utilDot);
+
+              const utilLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+              utilLabel.setAttribute('x', String(x));
+              utilLabel.setAttribute('y', String(Math.max(topArea.y1 + 14, utilY - 12)));
+              utilLabel.setAttribute('text-anchor', 'middle');
+              utilLabel.setAttribute('fill', 'rgba(244,247,251,0.92)');
+              utilLabel.setAttribute('font-size', '9');
+              utilLabel.setAttribute('font-weight', '800');
+              utilLabel.textContent = `${utilValue.toFixed(0)}%`;
+              utilLabel.style.pointerEvents = 'none';
+              svg.appendChild(utilLabel);
+            }
+
+            if (Number.isFinite(point.cumulativeLm) && point.cumulativeLm > 0) {
+              const lmY = yForLm(point.cumulativeLm);
+              const lmDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+              lmDot.setAttribute('cx', String(x));
+              lmDot.setAttribute('cy', String(lmY));
+              lmDot.setAttribute('r', '4.2');
+              lmDot.setAttribute('fill', item.color);
+              lmDot.setAttribute('stroke', 'rgba(255,255,255,0.88)');
+              lmDot.setAttribute('stroke-width', '1.4');
+              lmDot.style.cursor = 'pointer';
+              lmDot.addEventListener('mousemove', evt => showTooltip(evt, point.date, pointsForIndex(idx), x));
+              lmDot.addEventListener('mouseleave', hideTooltip);
+              svg.appendChild(lmDot);
+
+              const lmLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+              lmLabel.setAttribute('x', String(x));
+              lmLabel.setAttribute('y', String(Math.max(bottomArea.y1 + 12, lmY - 10)));
+              lmLabel.setAttribute('text-anchor', 'middle');
+              lmLabel.setAttribute('fill', 'rgba(244,247,251,0.88)');
+              lmLabel.setAttribute('font-size', '8');
+              lmLabel.setAttribute('font-weight', '800');
+              lmLabel.textContent = `${Math.round(point.cumulativeLm)}m`;
+              lmLabel.style.pointerEvents = 'none';
+              svg.appendChild(lmLabel);
+            }
+          });
+        });
+      }
+
+      svg.onmouseleave = hideTooltip;
+
+      if (els.utilizationChartWrap) {
+        bindUtilizationUnifiedScroll();
         requestAnimationFrame(() => {
           const hasOverflow = els.utilizationChartWrap.scrollWidth > els.utilizationChartWrap.clientWidth + 4;
           els.utilizationChartWrap.scrollLeft = hasOverflow
@@ -3794,7 +4452,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
       if (els.utilizationTableBody) {
         if (!rows.length) {
-          els.utilizationTableBody.innerHTML = '<tr><td colspan="6" class="utilization-empty">No utilization data available for current scope.</td></tr>';
+          els.utilizationTableBody.innerHTML = '<tr><td colspan="7" class="utilization-empty">No utilization data available for current scope.</td></tr>';
         } else {
           els.utilizationTableBody.innerHTML = dayGroups.map(group => group.items.map((row, idx) => {
             const utilClass = row.utilization >= 75 ? 'utilization-high' : (row.utilization >= 45 ? 'utilization-mid' : 'utilization-low');
@@ -3810,6 +4468,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
                   </span>
                 </td>
                 <td class="num">${row.drillingHours.toFixed(1)}</td>
+                <td class="num">${row.drilledLm.toFixed(1)}</td>
                 <td class="num">${row.shiftHours.toFixed(1)}</td>
                 <td class="num ${utilClass}">${row.utilization.toFixed(1)}%</td>
                 ${idx === 0 ? `<td rowspan="${group.items.length}" class="num ${totalClass} utilization-total-cell">${group.totalUtilization.toFixed(1)}%</td>` : ''}
@@ -3819,7 +4478,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         }
       }
 
-      renderUtilizationChart(rows);
+      renderUtilizationCombinedChart(rows);
     }
 
     function renderManpowerPage(project) {

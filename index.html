@@ -332,6 +332,7 @@
                       <th>Date</th>
                       <th>Rig</th>
                       <th class="num">Drilling Hr</th>
+                      <th class="num">Drilled Lm</th>
                       <th class="num">Shift Hr</th>
                       <th class="num">Rig Util.</th>
                       <th class="num">Day Total</th>
@@ -351,13 +352,27 @@
                 <div class="panel-tag" id="utilizationChartTag">Daily</div>
               </div>
               <div class="utilization-toolbar">
-                <button class="mini-toggle active" data-util-mode="daily" type="button">Daily</button>
-                <button class="mini-toggle" data-util-mode="cumulative" type="button">Cumulative</button>
+                <div class="utilization-toolbar-controls">
+                  <button class="mini-toggle active" data-util-mode="daily" type="button">Daily</button>
+                  <button class="mini-toggle" data-util-mode="cumulative" type="button">Cumulative</button>
+                </div>
+                <div class="utilization-legend utilization-legend-toolbar" id="utilizationLegend"></div>
               </div>
-              <div class="utilization-chart-wrap" id="utilizationChartWrap">
-                <svg class="utilization-chart-svg" id="utilizationSvg" viewBox="0 0 1000 320" preserveAspectRatio="xMidYMid meet"></svg>
+              <div class="utilization-chart-stack">
+                <div class="utilization-axis-overlay" id="utilizationAxisOverlay" aria-hidden="true">
+                  <div class="utilization-axis-block utilization-axis-block-top">
+                    <div class="utilization-axis-title">Utilization %</div>
+                    <div class="utilization-axis-ticks" id="utilizationUtilTicks"></div>
+                  </div>
+                  <div class="utilization-axis-block utilization-axis-block-bottom">
+                    <div class="utilization-axis-title">Drilled Lm</div>
+                    <div class="utilization-axis-ticks" id="utilizationLmTicks"></div>
+                  </div>
+                </div>
+                <div class="utilization-chart-wrap" id="utilizationChartWrap">
+                  <svg class="utilization-chart-svg" id="utilizationSvg" viewBox="0 0 1000 320" preserveAspectRatio="xMidYMid meet"></svg>
+                </div>
               </div>
-              <div class="utilization-legend" id="utilizationLegend"></div>
             </div>
           </div>
         </section>

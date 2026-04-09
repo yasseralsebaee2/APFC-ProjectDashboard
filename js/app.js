@@ -2698,7 +2698,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         vb: 101,
         rig: 108.2,
         we: 151.4,
-        me: 3276.9,
+        me: 315.5,
         hl: 101
       };
 

@@ -765,23 +765,24 @@
       );
     }
 
-    function yesterdayKey() {
-      const now = new Date();
-      const shiftNow = new Date(now);
-      const totalMinutes = shiftNow.getUTCHours() * 60 + shiftNow.getUTCMinutes();
-      if (totalMinutes < (7 * 60)) {
-        shiftNow.setUTCDate(shiftNow.getUTCDate() - 1);
-      }
-      shiftNow.setUTCDate(shiftNow.getUTCDate() - 1);
-      return shiftNow.toISOString().slice(0, 10);
+    function getLatestExecutionDateKey(rows) {
+      let latestKey = '';
+      (Array.isArray(rows) ? rows : []).forEach(row => {
+        if (!isExecutedRow(row)) return;
+        const executionKey = getExecutionDateKey(row);
+        if (executionKey && (!latestKey || executionKey > latestKey)) {
+          latestKey = executionKey;
+        }
+      });
+      return latestKey;
     }
 
-    function isYesterdayExecutedRow(row) {
-      return isExecutedRow(row) && getExecutionDateKey(row) === yesterdayKey();
+    function isYesterdayExecutedRow(row, latestExecutionKey) {
+      return !!latestExecutionKey && isExecutedRow(row) && getExecutionDateKey(row) === latestExecutionKey;
     }
 
-    function getPileColor(row) {
-      return isYesterdayExecutedRow(row) ? 0xFF6B2C : (isExecutedRow(row) ? 0x00E56A : 0xE8EDF3);
+    function getPileColor(row, latestExecutionKey) {
+      return isYesterdayExecutedRow(row, latestExecutionKey) ? 0xFF6B2C : (isExecutedRow(row) ? 0x00E56A : 0xE8EDF3);
     }
     function getBaseOpacityForRecord(record) {
       if (record?.executed) return Math.min(0.95, allBaseOpacity + 0.20);
@@ -792,6 +793,7 @@
     }
 
     function buildPileRecords(rows) {
+      const latestExecutionKey = getLatestExecutionDateKey(rows);
       return rows.map(row => {
         const lngLat = dltmToWgs84(row.design_x, row.design_y);
         if (!lngLat) return null;
@@ -801,9 +803,9 @@
           lngLat,
           radiusM: getPileRadiusMeters(row),
           heightM: getVisiblePileHeight(row),
-          color: getPileColor(row),
+          color: getPileColor(row, latestExecutionKey),
           executed: isExecutedRow(row),
-          executedYesterday: isYesterdayExecutedRow(row)
+          executedYesterday: isYesterdayExecutedRow(row, latestExecutionKey)
         };
       }).filter(Boolean);
     }

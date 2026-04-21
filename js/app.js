@@ -347,7 +347,7 @@
         shift: normalizeText(row.Shift || row.shift),
         campNumber: normalizeText(row['Camp Number'] || row.campNumber || row.camp_number || row.camp),
         roomNumber: normalizeText(row['Room Number'] || row.roomNumber || row.room_number || row.room),
-        joiningDate: normalizeText(row['Joining Date'] || row.joiningDate || row.joining_date || row.joiningdate),
+        joiningDate: normalizeText(row.joiningdate || row['Joining Date'] || row.joiningDate || row.joining_date),
         remarks: normalizeText(row.Remarks || row.remarks)
       };
     }
@@ -3743,7 +3743,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const colorByCategory = {
         rig: '#8ef0bf',
         crane: '#f1d48b',
-        vibrator: '#f5a6b8'
+        other: '#f5a6b8'
       };
 
       return manpowerDateKeys.map(dateKey => {
@@ -3751,7 +3751,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           .filter(item => item.date === dateKey)
           .filter(item => {
             const typeKey = normalizeText(item.type).toLowerCase();
-            return typeKey === 'rig' || typeKey === 'crane' || typeKey === 'vibrator';
+            return !!typeKey;
           })
           .reduce((acc, item) => {
             const typeKey = normalizeText(item.type).toLowerCase();
@@ -3759,15 +3759,28 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
             const dedupeKey = `${typeKey}::${labelKey}`;
             if (acc.some(existing => existing._dedupeKey === dedupeKey)) return acc;
             const ownership = normalizeText(item.contractor).toLowerCase() === 'apfc' ? 'Owned' : 'Rented';
+            const category = typeKey === 'rig' || typeKey === 'crane' ? typeKey : 'other';
             acc.push({
               _dedupeKey: dedupeKey,
               ownership,
-              category: typeKey,
+              category,
+              type: item.type,
               label: item.label || typeKey,
-              color: colorByCategory[typeKey] || '#9ca3af'
+              color: colorByCategory[category] || colorByCategory.vibrator || '#9ca3af'
             });
             return acc;
-          }, []);
+          }, [])
+          .sort((a, b) => {
+            const categoryOrder = { rig: 0, crane: 1, other: 2 };
+            const ownershipOrder = { owned: 0, rented: 1 };
+            const aCategory = categoryOrder[a.category] ?? 99;
+            const bCategory = categoryOrder[b.category] ?? 99;
+            if (aCategory !== bCategory) return aCategory - bCategory;
+            const aOwnership = ownershipOrder[normalizeText(a.ownership).toLowerCase()] ?? 99;
+            const bOwnership = ownershipOrder[normalizeText(b.ownership).toLowerCase()] ?? 99;
+            if (aOwnership !== bOwnership) return aOwnership - bOwnership;
+            return normalizeText(a.label).localeCompare(normalizeText(b.label), undefined, { numeric: true });
+          });
 
         const rigs = itemsForDate.filter(item => item.category === 'rig').length;
         const cranes = itemsForDate.filter(item => item.category === 'crane').length;
@@ -3926,76 +3939,262 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       els.companyExportPanel.hidden = !show;
     }
 
+    function escapeXml(value) {
+      return String(value ?? '')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&apos;');
+    }
+
+    function columnNameFromIndex(index) {
+      let name = '';
+      let current = index + 1;
+      while (current > 0) {
+        const remainder = (current - 1) % 26;
+        name = String.fromCharCode(65 + remainder) + name;
+        current = Math.floor((current - 1) / 26);
+      }
+      return name;
+    }
+
+    function crc32(bytes) {
+      const table = crc32.table || (crc32.table = (() => {
+        const values = [];
+        for (let i = 0; i < 256; i += 1) {
+          let c = i;
+          for (let j = 0; j < 8; j += 1) {
+            c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+          }
+          values[i] = c >>> 0;
+        }
+        return values;
+      })());
+      let crc = 0 ^ -1;
+      for (let i = 0; i < bytes.length; i += 1) {
+        crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xff];
+      }
+      return (crc ^ -1) >>> 0;
+    }
+
+    function writeUint16(bytes, value) {
+      bytes.push(value & 0xff, (value >>> 8) & 0xff);
+    }
+
+    function writeUint32(bytes, value) {
+      bytes.push(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff);
+    }
+
+    function appendBytes(target, source) {
+      for (let i = 0; i < source.length; i += 1) {
+        target.push(source[i]);
+      }
+    }
+
+    function createZip(files) {
+      const encoder = new TextEncoder();
+      const bytes = [];
+      const centralDirectory = [];
+
+      files.forEach(file => {
+        const nameBytes = encoder.encode(file.name);
+        const dataBytes = encoder.encode(file.content);
+        const offset = bytes.length;
+        const checksum = crc32(dataBytes);
+
+        writeUint32(bytes, 0x04034b50);
+        writeUint16(bytes, 20);
+        writeUint16(bytes, 0);
+        writeUint16(bytes, 0);
+        writeUint16(bytes, 0);
+        writeUint16(bytes, 0);
+        writeUint32(bytes, checksum);
+        writeUint32(bytes, dataBytes.length);
+        writeUint32(bytes, dataBytes.length);
+        writeUint16(bytes, nameBytes.length);
+        writeUint16(bytes, 0);
+        appendBytes(bytes, nameBytes);
+        appendBytes(bytes, dataBytes);
+
+        centralDirectory.push({ file, nameBytes, dataBytes, offset, checksum });
+      });
+
+      const centralOffset = bytes.length;
+      centralDirectory.forEach(entry => {
+        writeUint32(bytes, 0x02014b50);
+        writeUint16(bytes, 20);
+        writeUint16(bytes, 20);
+        writeUint16(bytes, 0);
+        writeUint16(bytes, 0);
+        writeUint16(bytes, 0);
+        writeUint16(bytes, 0);
+        writeUint32(bytes, entry.checksum);
+        writeUint32(bytes, entry.dataBytes.length);
+        writeUint32(bytes, entry.dataBytes.length);
+        writeUint16(bytes, entry.nameBytes.length);
+        writeUint16(bytes, 0);
+        writeUint16(bytes, 0);
+        writeUint16(bytes, 0);
+        writeUint16(bytes, 0);
+        writeUint32(bytes, 0);
+        writeUint32(bytes, entry.offset);
+        appendBytes(bytes, entry.nameBytes);
+      });
+
+      const centralSize = bytes.length - centralOffset;
+      writeUint32(bytes, 0x06054b50);
+      writeUint16(bytes, 0);
+      writeUint16(bytes, 0);
+      writeUint16(bytes, files.length);
+      writeUint16(bytes, files.length);
+      writeUint32(bytes, centralSize);
+      writeUint32(bytes, centralOffset);
+      writeUint16(bytes, 0);
+
+      return new Uint8Array(bytes);
+    }
+
+    function createXlsxWorkbook(sheetName, rows) {
+      const safeSheetName = String(sheetName || 'Manpower').replace(/[\[\]:*?/\\]/g, ' ').slice(0, 31) || 'Manpower';
+      const columnWidths = [20, 34, 30, 18, 14, 14, 14, 18, 34];
+      const sheetRows = rows.map((row, rowIndex) => {
+        const cells = row.map((value, colIndex) => {
+          const cellRef = `${columnNameFromIndex(colIndex)}${rowIndex + 1}`;
+          const styleIndex = rowIndex === 1 ? 1 : (rowIndex > 1 && colIndex === 0 ? 2 : 0);
+          return `<c r="${cellRef}" t="inlineStr" s="${styleIndex}"><is><t>${escapeXml(value)}</t></is></c>`;
+        }).join('');
+        return `<row r="${rowIndex + 1}">${cells}</row>`;
+      }).join('');
+
+      const worksheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <cols>${columnWidths.map((width, idx) => `<col min="${idx + 1}" max="${idx + 1}" width="${width}" customWidth="1"/>`).join('')}</cols>
+          <sheetData>${sheetRows}</sheetData>
+        </worksheet>`;
+
+      const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheets><sheet name="${escapeXml(safeSheetName)}" sheetId="1" r:id="rId1"/></sheets>
+        </workbook>`;
+
+      const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <fonts count="2"><font><sz val="11"/><name val="Segoe UI"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Segoe UI"/></font></fonts>
+          <fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0F1720"/><bgColor indexed="64"/></patternFill></fill></fills>
+          <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+          <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+          <cellXfs count="3">
+            <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+            <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+            <xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+          </cellXfs>
+          <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+        </styleSheet>`;
+
+      return createZip([
+        {
+          name: '[Content_Types].xml',
+          content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+              <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+              <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+            </Types>`
+        },
+        {
+          name: '_rels/.rels',
+          content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+            </Relationships>`
+        },
+        {
+          name: 'xl/workbook.xml',
+          content: workbookXml
+        },
+        {
+          name: 'xl/_rels/workbook.xml.rels',
+          content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+              <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+            </Relationships>`
+        },
+        {
+          name: 'xl/worksheets/sheet1.xml',
+          content: worksheetXml
+        },
+        {
+          name: 'xl/styles.xml',
+          content: stylesXml
+        }
+      ]);
+    }
+
+    function formatExportDate(value) {
+      const raw = normalizeText(value);
+      if (!raw || raw === '-') return '-';
+      const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) return `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) {
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}-${month}-${year}`;
+      }
+      return raw;
+    }
+
     function exportCompanyManpowerWorkbook(scopeProject) {
-      const normalizedScope = normalizeText(scopeProject).toLowerCase();
-      const rows = companyManpowerRows
+      const scopeText = normalizeText(scopeProject);
+      const normalizedScope = scopeText.toLowerCase();
+      const isAllScope = normalizedScope === 'all' || normalizedScope === 'all projects' || isAllProjectsValue(scopeText);
+      const sanitizedRows = companyManpowerRows
         .map(sanitizeCompanyEmployee)
-        .filter(employee => employee.employeeName && employee.designation)
-        .filter(employee => normalizedScope === 'all' || employee.project === scopeProject)
+        .filter(employee => employee.employeeName && employee.designation);
+      const rows = (isAllScope
+        ? sanitizedRows
+        : sanitizedRows.filter(employee => getCompanyProjectToken(employee.projectRaw || employee.project) === getCompanyProjectToken(scopeText))
+      )
         .sort((a, b) => (
           a.project.localeCompare(b.project) ||
           a.designation.localeCompare(b.designation) ||
           a.employeeName.localeCompare(b.employeeName)
         ));
 
-      const title = normalizedScope === 'all' ? 'APFC Company Manpower' : `${scopeProject} Manpower`;
+      const title = isAllScope ? 'APFC Company Manpower' : `${scopeText} Manpower`;
       const generatedAt = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dubai' });
-      const tableRows = rows.map(row => `
-        <tr>
-          <td>${escapeHtml(row.employeeNumber || '-')}</td>
-          <td>${escapeHtml(row.employeeName)}</td>
-          <td>${escapeHtml(row.designation)}</td>
-          <td>${escapeHtml(row.project)}</td>
-          <td>${escapeHtml(row.shift || '-')}</td>
-          <td>${escapeHtml(row.campNumber || '-')}</td>
-          <td>${escapeHtml(row.roomNumber || '-')}</td>
-          <td>${escapeHtml(row.joiningDate || '-')}</td>
-          <td>${escapeHtml(row.remarks || '-')}</td>
-        </tr>
-      `).join('');
+      if (!rows.length) {
+        alert('No manpower records found for the selected export scope.');
+        return;
+      }
+      const worksheetRows = [
+        [title, `Generated from APFC Project Dashboard on ${generatedAt}`, '', '', '', '', '', '', ''],
+        ['Employee Number', 'Employee Name', 'Designation', 'Project', 'Shift', 'Camp Number', 'Room Number', 'Joining Date', 'Remarks'],
+        ...rows.map(row => [
+          row.employeeNumber || '-',
+          row.employeeName || '-',
+          row.designation || '-',
+          row.project || '-',
+          row.shift || '-',
+          row.campNumber || '-',
+          row.roomNumber || '-',
+          formatExportDate(row.joiningDate),
+          row.remarks || '-'
+        ])
+      ];
 
-      const workbookHtml = `
-        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-          <head>
-            <meta charset="UTF-8">
-            <style>
-              body { font-family: Segoe UI, Arial, sans-serif; color: #0e1b24; }
-              h1 { margin: 0 0 6px; font-size: 22px; }
-              p { margin: 0 0 14px; color: #41515e; font-size: 12px; }
-              table { border-collapse: collapse; width: 100%; }
-              th, td { border: 1px solid #c6d3dc; padding: 8px 10px; font-size: 11px; text-align: left; }
-              th { background: #0f1720; color: #ffffff; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-              tr:nth-child(even) td { background: #f4f8fb; }
-            </style>
-          </head>
-          <body>
-            <h1>${escapeHtml(title)}</h1>
-            <p>Generated from APFC Project Dashboard on ${escapeHtml(generatedAt)}</p>
-            <table>
-              <thead>
-                <tr>
-                  <th>Employee Number</th>
-                  <th>Employee Name</th>
-                  <th>Designation</th>
-                  <th>Project</th>
-                  <th>Shift</th>
-                  <th>Camp Number</th>
-                  <th>Room Number</th>
-                  <th>Joining Date</th>
-                  <th>Remarks</th>
-                </tr>
-              </thead>
-              <tbody>${tableRows}</tbody>
-            </table>
-          </body>
-        </html>
-      `;
-
-      const blob = new Blob([workbookHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const workbookBytes = createXlsxWorkbook('Manpower', worksheetRows);
+      const blob = new Blob([workbookBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const link = document.createElement('a');
-      const slug = normalizedScope === 'all' ? 'all-projects' : scopeProject.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const slug = isAllScope ? 'all-projects' : scopeText.toLowerCase().replace(/[^a-z0-9]+/g, '-');
       link.href = URL.createObjectURL(blob);
-      link.download = `apfc-manpower-${slug}.xls`;
+      link.download = `apfc-manpower-${slug}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -5700,6 +5899,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
                   <span class="equipment-chip">
                     <span class="equipment-chip-dot equipment-chip-dot-${normalizeText(item.ownership).toLowerCase()}"></span>
                     <span class="equipment-ownership equipment-ownership-${normalizeText(item.ownership).toLowerCase()}">${escapeHtml(item.ownership)}</span>
+                    <span class="equipment-type">${escapeHtml(item.type || item.category || '')}</span>
                     <span class="equipment-name">${escapeHtml(item.label)}</span>
                   </span>
                 `).join('')}</div>`

@@ -3035,8 +3035,16 @@ body.auth-locked .auth-shell {
 }
 
 .equipment-ownership,
+.equipment-type,
 .equipment-name {
   font-size: 10px;
+}
+
+.equipment-type {
+  color: rgba(244,247,251,0.68);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .equipment-name {

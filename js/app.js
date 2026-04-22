@@ -176,6 +176,7 @@
     let companyAnalyticsScopeMode = 'filtered';
     let companyAnalyticsLayoutMode = 'overview';
     let companyAnalyticsDesignationFilter = 'all';
+    let companyHeatmapExpandedDesignations = new Set();
     let utilizationMode = 'daily';
     let overviewDateMode = 'shift'; // shared reporting mode for Overview + Production only
     let prodState = {
@@ -341,7 +342,8 @@
       return {
         employeeNumber: normalizeText(row['Employee Number'] || row.employeeNumber || row.employee_number || row.employeenumber),
         employeeName: normalizeText(row['Employee Name'] || row.employeeName || row.employee_name || row.employeename),
-        designation: normalizeText(row.Designation || row.designation),
+        designation: normalizeText(row.generaldesignation),
+        subDesignation: normalizeText(row.designation),
         project: getCompanyProjectLabel(row.Project || row.project),
         projectRaw: normalizeText(row.Project || row.project),
         shift: normalizeText(row.Shift || row.shift),
@@ -3657,8 +3659,17 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const svg = els.manpowerHistSvg;
       if (!svg) return;
       while (svg.firstChild) svg.removeChild(svg.firstChild);
+      const wrap = svg.parentElement;
 
       if (!rows.length) {
+        if (wrap) {
+          wrap.classList.remove('equipment-chart-wrap-scrollable');
+          wrap.style.overflowX = 'hidden';
+          wrap.style.overflowY = 'hidden';
+          wrap.scrollLeft = 0;
+        }
+        svg.style.width = '100%';
+        svg.style.minWidth = '100%';
         const empty = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         empty.setAttribute('x', '500');
         empty.setAttribute('y', '160');
@@ -3671,18 +3682,34 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         return;
       }
 
-      const chartW = 1000;
+      const maxVisibleBars = 14;
       const chartH = 320;
       const left = 52;
       const right = 18;
       const top = 16;
       const bottom = 62;
+      const orderedRows = rows.slice().reverse();
+      const isScrollable = orderedRows.length > maxVisibleBars;
+      const visiblePlotW = 1000 - left - right;
+      const overflowSlotW = visiblePlotW / maxVisibleBars;
+      const overflowBarW = 28;
+      const chartW = isScrollable ? left + right + ((orderedRows.length - 1) * overflowSlotW) + overflowBarW : 1000;
       const innerH = chartH - top - bottom;
-      const stepX = (chartW - left - right) / Math.max(rows.length, 1);
-      const barW = Math.max(16, Math.min(40, stepX * 0.5));
+      const stepX = isScrollable ? overflowSlotW : (chartW - left - right) / Math.max(orderedRows.length, 1);
+      const barW = isScrollable ? overflowBarW : Math.max(16, Math.min(40, stepX * 0.5));
       const maxVal = Math.max(...rows.map(r => r.total), 1);
       const scaleY = innerH / maxVal;
       svg.setAttribute('viewBox', `0 0 ${chartW} ${chartH}`);
+      if (wrap) {
+        wrap.classList.toggle('equipment-chart-wrap-scrollable', isScrollable);
+        wrap.style.overflowX = isScrollable ? 'auto' : 'hidden';
+        wrap.style.overflowY = 'hidden';
+        wrap.style.webkitOverflowScrolling = 'touch';
+        if (!isScrollable) wrap.scrollLeft = 0;
+      }
+      svg.style.width = isScrollable ? `${chartW}px` : '100%';
+      svg.style.minWidth = isScrollable ? `${chartW}px` : '100%';
+      svg.style.height = '100%';
 
       let tooltipEl = document.getElementById('manpowerTooltip');
       if (!tooltipEl) {
@@ -3731,13 +3758,14 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         svg.appendChild(line);
       }
 
-      rows.slice().reverse().forEach((row, idx) => {
-        const x = left + stepX * idx + stepX / 2;
+      orderedRows.forEach((row, idx) => {
+        const barX = isScrollable ? (left + stepX * idx) : (left + stepX * idx + (stepX - barW) / 2);
+        const x = barX + barW / 2;
         const h = row.total * scaleY;
         const y = chartH - bottom - h;
 
         const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        bar.setAttribute('x', String(x - barW / 2));
+        bar.setAttribute('x', String(barX));
         bar.setAttribute('y', String(y));
         bar.setAttribute('width', String(barW));
         bar.setAttribute('height', String(h));
@@ -3754,7 +3782,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         val.setAttribute('y', String(Math.max(y - 6, 12)));
         val.setAttribute('text-anchor', 'middle');
         val.setAttribute('fill', 'rgba(244,247,251,0.92)');
-        val.setAttribute('font-size', '16');
+        val.setAttribute('font-size', '11');
         val.setAttribute('font-weight', '800');
         val.textContent = String(row.total);
         svg.appendChild(val);
@@ -3764,11 +3792,25 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         dateLabel.setAttribute('y', String(chartH - 18));
         dateLabel.setAttribute('text-anchor', 'middle');
         dateLabel.setAttribute('fill', 'rgba(244,247,251,0.72)');
-        dateLabel.setAttribute('font-size', '13');
+        dateLabel.setAttribute('font-size', '11');
         dateLabel.setAttribute('font-weight', '700');
         dateLabel.textContent = formatShortDateLabel(row.date);
         svg.appendChild(dateLabel);
       });
+
+      if (wrap && isScrollable) {
+        requestAnimationFrame(() => {
+          wrap.scrollLeft = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+        });
+        if (!wrap.dataset.manpowerWheelBound) {
+          wrap.addEventListener('wheel', evt => {
+            if (Math.abs(evt.deltaY) <= Math.abs(evt.deltaX)) return;
+            evt.preventDefault();
+            wrap.scrollLeft += evt.deltaY;
+          }, { passive: false });
+          wrap.dataset.manpowerWheelBound = 'true';
+        }
+      }
 
       svg.onmouseleave = hideTooltip;
     }
@@ -4557,13 +4599,21 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       });
     }
 
-    function renderCompanyHeatmap(projectCountsByDesignation, projectOrder) {
+    function renderCompanyHeatmap(projectCountsByDesignation, projectOrder, subCountsByDesignation) {
       if (!els.companyHeatmapHead || !els.companyHeatmapBody) return;
-      const designationNames = Array.from(projectCountsByDesignation.keys()).sort((a, b) => a.localeCompare(b));
+      const getDesignationTotal = name => projectOrder.reduce((sum, project) => sum + (projectCountsByDesignation.get(name)?.get(project) || 0), 0);
+      const getSubDesignationTotal = (name, subName) => projectOrder.reduce((sum, project) => (
+        sum + (subCountsByDesignation.get(name)?.get(subName)?.get(project) || 0)
+      ), 0);
+      const designationNames = Array.from(projectCountsByDesignation.keys())
+        .sort((a, b) => getDesignationTotal(b) - getDesignationTotal(a) || a.localeCompare(b));
       const maxValue = Math.max(1, ...designationNames.flatMap(name => projectOrder.map(project => projectCountsByDesignation.get(name)?.get(project) || 0)));
+      const grandTotal = designationNames.reduce((sum, name) => (
+        sum + projectOrder.reduce((rowSum, project) => rowSum + (projectCountsByDesignation.get(name)?.get(project) || 0), 0)
+      ), 0);
 
       els.companyHeatmapHead.innerHTML = [
-        '<th>Designation</th>',
+        `<th><span class="company-heatmap-designation-cell"><span>Designation</span><strong>${grandTotal}</strong></span></th>`,
         ...projectOrder.map(project => `<th>${escapeHtml(project)}</th>`)
       ].join('');
 
@@ -4573,14 +4623,62 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       }
 
       els.companyHeatmapBody.innerHTML = designationNames.map(name => {
+        const designationTotal = getDesignationTotal(name);
+        const subMap = subCountsByDesignation.get(name) || new Map();
+        const subNames = Array.from(subMap.keys())
+          .sort((a, b) => getSubDesignationTotal(name, b) - getSubDesignationTotal(name, a) || a.localeCompare(b));
+        const hasSubDesignations = subNames.length > 0;
+        const isExpanded = companyHeatmapExpandedDesignations.has(name);
         const cells = projectOrder.map(project => {
           const value = projectCountsByDesignation.get(name)?.get(project) || 0;
           const alpha = value <= 0 ? 0.04 : (0.12 + (value / maxValue) * 0.62);
           const color = `rgba(142,240,191,${alpha.toFixed(3)})`;
           return `<td style="background:${color};">${value > 0 ? value : '-'}</td>`;
         }).join('');
-        return `<tr><td>${escapeHtml(name)}</td>${cells}</tr>`;
+        const parentRow = `
+          <tr class="company-heatmap-parent-row">
+            <td>
+              <span class="company-heatmap-designation-cell">
+                <span class="company-heatmap-title-wrap">
+                  ${hasSubDesignations ? `<button class="company-heatmap-expand" type="button" data-heatmap-designation="${escapeHtml(name)}" aria-label="${isExpanded ? 'Collapse' : 'Expand'} ${escapeHtml(name)}">${isExpanded ? '-' : '+'}</button>` : '<span class="company-heatmap-expand-placeholder"></span>'}
+                  <span>${escapeHtml(name)}</span>
+                </span>
+                <strong>${designationTotal}</strong>
+              </span>
+            </td>
+            ${cells}
+          </tr>
+        `;
+        if (!isExpanded || !hasSubDesignations) return parentRow;
+        const subRows = subNames.map(subName => {
+          const subTotal = getSubDesignationTotal(name, subName);
+          const subCells = projectOrder.map(project => {
+            const value = subMap.get(subName)?.get(project) || 0;
+            const alpha = value <= 0 ? 0.035 : (0.08 + (value / maxValue) * 0.38);
+            const color = `rgba(122,184,255,${alpha.toFixed(3)})`;
+            return `<td class="company-heatmap-sub-cell" style="background:${color};">${value > 0 ? value : '-'}</td>`;
+          }).join('');
+          return `
+            <tr class="company-heatmap-sub-row">
+              <td><span class="company-heatmap-designation-cell company-heatmap-subdesignation-cell"><span>${escapeHtml(subName)}</span><strong>${subTotal}</strong></span></td>
+              ${subCells}
+            </tr>
+          `;
+        }).join('');
+        return parentRow + subRows;
       }).join('');
+
+      els.companyHeatmapBody.querySelectorAll('[data-heatmap-designation]').forEach(button => {
+        button.addEventListener('click', () => {
+          const designation = button.getAttribute('data-heatmap-designation') || '';
+          if (companyHeatmapExpandedDesignations.has(designation)) {
+            companyHeatmapExpandedDesignations.delete(designation);
+          } else {
+            companyHeatmapExpandedDesignations.add(designation);
+          }
+          renderCompanyHeatmap(projectCountsByDesignation, projectOrder, subCountsByDesignation);
+        });
+      });
     }
 
     function renderCompanyShiftDonut(shiftEntries, total) {
@@ -4654,15 +4752,24 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const designationCounts = buildCountMap(items, item => item.designation);
       const shiftCounts = buildCountMap(items, item => item.shift || 'Unspecified');
       const projectEntries = Array.from(projectCounts.entries()).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
-      const designationEntries = Array.from(designationCounts.entries()).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+      const designationEntries = Array.from(designationCounts.entries()).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+      const topDesignationEntry = Array.from(designationCounts.entries()).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)[0];
       const shiftEntries = Array.from(shiftCounts.entries()).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
       const projectOrder = Array.from(projectCounts.keys()).sort((a, b) => projectEntries.findIndex(entry => entry.label === a) - projectEntries.findIndex(entry => entry.label === b));
       const projectCountsByDesignation = new Map();
+      const subCountsByDesignation = new Map();
 
       items.forEach(item => {
         if (!projectCountsByDesignation.has(item.designation)) projectCountsByDesignation.set(item.designation, new Map());
         const designationMap = projectCountsByDesignation.get(item.designation);
         designationMap.set(item.project, (designationMap.get(item.project) || 0) + 1);
+
+        const subDesignation = item.subDesignation || item.designation;
+        if (!subCountsByDesignation.has(item.designation)) subCountsByDesignation.set(item.designation, new Map());
+        const subMap = subCountsByDesignation.get(item.designation);
+        if (!subMap.has(subDesignation)) subMap.set(subDesignation, new Map());
+        const subProjectMap = subMap.get(subDesignation);
+        subProjectMap.set(item.project, (subProjectMap.get(item.project) || 0) + 1);
       });
 
       if (els.companyAnalyticsDesignationSelect && els.companyAnalyticsDesignationSelect.value !== companyAnalyticsDesignationFilter) {
@@ -4682,7 +4789,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
       if (els.companyAnalyticsKpis) {
         const topProject = projectEntries[0];
-        const topDesignation = designationEntries[0];
+        const topDesignation = topDesignationEntry;
         const dayShare = shiftCounts.get('Day') || shiftCounts.get('day') || 0;
         const midShare = shiftCounts.get('Mid') || shiftCounts.get('mid') || 0;
         const nightShare = shiftCounts.get('Night') || shiftCounts.get('night') || 0;
@@ -4703,11 +4810,11 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
       const primaryPieEntries = companyAnalyticsScopeMode === 'all' ? projectEntries : designationEntries;
       renderCompanyAnalyticsPie(els.companyProjectBars, primaryPieEntries, {
-        centerLabel: companyAnalyticsScopeMode === 'all' ? 'Projects' : 'Roles',
+        centerLabel: 'TOTAL',
         emptyLabel: companyAnalyticsScopeMode === 'all' ? 'No project headcount available.' : 'No designation headcount available.'
       });
       renderRankBars(els.companyDesignationBars, designationEntries, value => `${value} staff`, 'No designation headcount available.');
-      renderCompanyHeatmap(projectCountsByDesignation, projectOrder);
+      renderCompanyHeatmap(projectCountsByDesignation, projectOrder, subCountsByDesignation);
     }
 
     function renderEquipmentHistogram(rows) {
@@ -4853,7 +4960,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         totalLabel.setAttribute('y', String(Math.max(currentY - 6, 12)));
         totalLabel.setAttribute('text-anchor', 'middle');
         totalLabel.setAttribute('fill', 'rgba(244,247,251,0.94)');
-        totalLabel.setAttribute('font-size', '15');
+        totalLabel.setAttribute('font-size', '11');
         totalLabel.setAttribute('font-weight', '800');
         totalLabel.textContent = String(row.total);
         svg.appendChild(totalLabel);
@@ -4863,7 +4970,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         dateLabel.setAttribute('y', String(chartH - 18));
         dateLabel.setAttribute('text-anchor', 'middle');
         dateLabel.setAttribute('fill', 'rgba(244,247,251,0.72)');
-        dateLabel.setAttribute('font-size', '13');
+        dateLabel.setAttribute('font-size', '11');
         dateLabel.setAttribute('font-weight', '700');
         dateLabel.textContent = formatShortDateLabel(row.date);
         svg.appendChild(dateLabel);

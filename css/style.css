@@ -3710,10 +3710,10 @@ body.auth-locked .auth-shell {
 
 .company-heatmap-table th,
 .company-heatmap-table td {
-  padding: 10px 12px;
+  padding: 7px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -3728,6 +3728,83 @@ body.auth-locked .auth-shell {
 .company-heatmap-table th:first-child,
 .company-heatmap-table td:first-child {
   text-align: left;
+}
+
+.company-heatmap-designation-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 210px;
+}
+
+.company-heatmap-designation-cell strong {
+  color: #8ef0bf;
+  font-size: 10px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.company-heatmap-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.company-heatmap-expand,
+.company-heatmap-expand-placeholder {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  border-radius: 6px;
+}
+
+.company-heatmap-expand {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(142,240,191,0.28);
+  background: rgba(142,240,191,0.1);
+  color: #8ef0bf;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.company-heatmap-expand:hover {
+  background: rgba(142,240,191,0.18);
+  border-color: rgba(142,240,191,0.52);
+  transform: translateY(-1px);
+}
+
+.company-heatmap-parent-row td:first-child {
+  font-weight: 900;
+}
+
+.company-heatmap-sub-row td {
+  color: rgba(244,247,251,0.72);
+  font-size: 9px;
+  border-bottom-color: rgba(255,255,255,0.045);
+}
+
+.company-heatmap-sub-row td:first-child {
+  background: #080d12;
+}
+
+.company-heatmap-subdesignation-cell {
+  padding-left: 24px;
+  min-width: 210px;
+}
+
+.company-heatmap-subdesignation-cell span {
+  color: rgba(244,247,251,0.68);
+  font-weight: 800;
+}
+
+.company-heatmap-subdesignation-cell strong {
+  color: #7ab8ff;
 }
 
 .company-donut-wrap {

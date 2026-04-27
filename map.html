@@ -469,7 +469,7 @@
   </div>
   </div>
 
-  <div class="footer"><div class="footer-text">APFC | Click any pile for details</div></div>
+  <div class="footer"><div class="footer-text">APFC | Click any element for details</div></div>
 
   <div class="status-legend glass-card" id="statusLegend">
     <div class="status-legend-title">Pile Status</div>
@@ -485,7 +485,7 @@
   </div>
   <div id="sidePanel" class="side-panel">
     <div class="side-panel-header">
-      <h3 id="panelTitle">Pile Info</h3>
+      <h3 id="panelTitle">Element Info</h3>
       <button class="side-panel-close" id="closePanel">&times;</button>
     </div>
     <div class="side-panel-body" id="panelBody"></div>
@@ -506,6 +506,7 @@
 
     mapboxgl.accessToken = 'pk.eyJ1IjoieWFzc2VyYWxzZWJhZWUiLCJhIjoiY20zbHdwam12MG9wdzJwczc2aGl0eTRwZCJ9.xZgmTXWHWe73-Ad1jhkmbQ';
     const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-pile-asbuilt.json_';
+    const KINGPOST_JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-kingpost-asbuilt.json_';
     const BASE_STYLE_URL = 'mapbox://styles/yasseralsebaee/cmmfw9dvc00b001ra2h2f5vrw';
     const SAT_STYLE_OBJECT = {
       version: 8,
@@ -624,6 +625,12 @@
         yesterdayEmissive: 0xff7a18,
         remaining: 0xf0f6fb,
         remainingEmissive: 0x9fb6c6,
+        kingpostInstalled: 0x12de68,
+        kingpostInstalledEmissive: 0x08b857,
+        kingpostReady: 0xff5a00,
+        kingpostReadyEmissive: 0xff7a00,
+        kingpostPending: 0x8c98a8,
+        kingpostPendingEmissive: 0x5f6c7f,
         selected: 0xffffff
       },
       camera: {
@@ -645,7 +652,9 @@
     let currentChartMode = 'daily';
     let chartInteractivePoints = [];
     let allPiles = [];
+    let allKingPosts = [];
     let pileRecords = [];
+    let kingPostRecords = [];
     let chartData = [];
     let SITE_CENTER = DEFAULT_SITE_CENTER;
     let pileLayer = null;
@@ -698,6 +707,12 @@
       return scoped.length ? scoped : allPiles;
     }
 
+    function getFocusedKingPosts(scope) {
+      if (!scope) return allKingPosts;
+      const scoped = allKingPosts.filter(row => matchesScope(row, scope));
+      return scoped.length ? scoped : allKingPosts;
+    }
+
     function getFocusedWidgetPiles() {
       return getFocusedPiles(getActiveScope());
     }
@@ -730,6 +745,44 @@
       return `${n >= 0 ? '+' : '-'}${Math.abs(n).toFixed(digits)}`;
     }
     function normalizeId(value) { return String(value || '').trim().toUpperCase(); }
+
+    function sanitizeKingPostRow(row) {
+      return {
+        contractor1: row?.asbuilt_Contractor1 ?? row?.contractor1 ?? null,
+        asbuilt_depth: row?.asbuilt_depth ?? null,
+        asbuilt_depthdrillingfromplatform: row?.asbuilt_DepthDrillingFromPlatform ?? null,
+        asbuilt_drillingEnd: row?.asbuilt_DrillingEnd ?? row?.asbuilt_drillingEnd ?? null,
+        asbuilt_drillingStart: row?.asbuilt_DrillingStart ?? row?.asbuilt_drillingStart ?? null,
+        asbuilt_durationdrilling: row?.asbuilt_DurationDrilling ?? row?.asbuilt_durationdrilling ?? null,
+        asbuilt_levelplatform: row?.asbuilt_LevelPlatform ?? null,
+        asbuilt_leveltoe: row?.asbuilt_LevelToe ?? null,
+        asbuilt_overexcavation: row?.asbuilt_overexcavation ?? row?.asbuilt_Overexcavation ?? null,
+        asbuilt_rig1: row?.asbuilt_Rig1 ?? null,
+        asbuilt_rig1depth: row?.asbuilt_Rig1Depth ?? null,
+        asbuilt_textfield: row?.asbuilt_TextField ?? null,
+        asbuilt_wir: row?.asbuilt_WIR ?? null,
+        asbuilt_x: row?.asbuilt_X ?? null,
+        asbuilt_y: row?.asbuilt_Y ?? null,
+        beamInstallation: row?.BeamInstallation ?? null,
+        building: row?.Building ?? null,
+        design_depthdrilling: row?.design_DepthDrilling ?? null,
+        design_levelplatform: row?.design_LevelPlatform ?? null,
+        design_leveltoe: row?.design_LevelToe ?? null,
+        design_leveltopofshoring: row?.design_LevelTopOfShoring ?? null,
+        design_x: row?.design_X ?? null,
+        design_y: row?.design_Y ?? null,
+        design_back_x: row?.design_back_X ?? row?.design_Back_X ?? null,
+        design_back_y: row?.design_back_Y ?? row?.design_Back_Y ?? null,
+        elementType: row?.ElementType ?? 'KingPost',
+        isInstalled: row?.IsInstalled ?? null,
+        operationalStatus: row?.OperationalStatus ?? null,
+        pileId: row?.PileID ?? null,
+        plot: row?.Plot ?? null,
+        profile: row?.Profile ?? null,
+        project: row?.Project ?? null,
+        section: row?.Section ?? null
+      };
+    }
 
     function dltmToWgs84(x, y) {
       try {
@@ -785,6 +838,89 @@
       const diaMm = parseNumber(row.diameter);
       const actualRadius = diaMm > 0 ? diaMm / 2000 : 0.5;
       return Math.max(actualRadius * DISPLAY_RADIUS_SCALE, MIN_DISPLAY_RADIUS_M);
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function parseKingPostProfile(profile) {
+      const text = normalizeText(profile).toUpperCase();
+      const match = text.match(/(\d+(?:\.\d+)?)\s*[Xx]\s*(\d+(?:\.\d+)?)\s*[Xx]\s*(\d+(?:\.\d+)?)/);
+      const depthMm = match ? parseNumber(match[1]) : 400;
+      const widthMm = match ? parseNumber(match[2]) : 200;
+      const weight = match ? parseNumber(match[3]) : 0;
+      const depthM = Math.max(depthMm / 1000, 0.18);
+      // Visualization-first tuning:
+      // keep the longitudinal depth from the profile so the element does not
+      // extend past the front/back points, but thicken the transverse section
+      // slightly so it stays readable in 2D plan view.
+      const widthM = Math.max((widthMm / 1000) * 1.95, 0.3);
+      const flangeThickness = clamp(depthM * 0.135, 0.055, 0.11);
+      const webThickness = clamp(widthM * 0.2 + (weight / 7600), 0.04, Math.min(widthM * 0.42, 0.082));
+      return {
+        profile: text || 'UB',
+        depthM,
+        widthM,
+        flangeThickness,
+        webThickness
+      };
+    }
+
+    function isInstalledKingPostRow(row) {
+      const flag = normalizeText(row?.isInstalled).toLowerCase();
+      return flag === 'true' || flag === 'yes' || flag === '1' || !!normalizeText(row?.beamInstallation);
+    }
+
+    function isReadyToInstallKingPostRow(row) {
+      return normalizeText(row?.operationalStatus).toLowerCase() === 'readytoinstall';
+    }
+
+    function getKingPostStateKey(row) {
+      if (isInstalledKingPostRow(row)) return 'installed';
+      if (isReadyToInstallKingPostRow(row)) return 'ready';
+      return 'pending';
+    }
+
+    function getKingPostColor(row) {
+      const state = getKingPostStateKey(row);
+      if (state === 'installed') return MAP_PREMIUM.colors.kingpostInstalled;
+      if (state === 'ready') return MAP_PREMIUM.colors.kingpostReady;
+      return MAP_PREMIUM.colors.kingpostPending;
+    }
+
+    function getKingPostEmissiveColor(row) {
+      const state = getKingPostStateKey(row);
+      if (state === 'installed') return MAP_PREMIUM.colors.kingpostInstalledEmissive;
+      if (state === 'ready') return MAP_PREMIUM.colors.kingpostReadyEmissive;
+      return MAP_PREMIUM.colors.kingpostPendingEmissive;
+    }
+
+    function getKingPostEdgeColor(record) {
+      const baseColor = new THREE.Color(record?.color ?? MAP_PREMIUM.colors.kingpostPending);
+      return baseColor.clone().lerp(new THREE.Color(0x1a2129), 0.34);
+    }
+
+    function getKingPostHighlightEdgeColor(record) {
+      const baseColor = new THREE.Color(record?.color ?? MAP_PREMIUM.colors.kingpostPending);
+      return baseColor.clone().lerp(new THREE.Color(0xf7fbff), 0.24);
+    }
+
+    function getKingPostRotationRadians(row) {
+      const frontLngLat = dltmToWgs84(row?.design_x, row?.design_y);
+      const backLngLat = dltmToWgs84(row?.design_back_x, row?.design_back_y);
+      if (!frontLngLat || !backLngLat) return 0;
+      const frontMerc = mapboxgl.MercatorCoordinate.fromLngLat(frontLngLat, 0);
+      const backMerc = mapboxgl.MercatorCoordinate.fromLngLat(backLngLat, 0);
+      const dx = backMerc.x - frontMerc.x;
+      const dy = backMerc.y - frontMerc.y;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy) || (Math.abs(dx) < 1e-12 && Math.abs(dy) < 1e-12)) {
+        return 0;
+      }
+      // The UB profile web centerline is authored along the local +Y axis.
+      // Rotate by -90deg from the vector angle so that the web follows the
+      // front/back reference points instead of the local +X axis.
+      return Math.atan2(dy, dx) - (Math.PI / 2);
     }
 
 
@@ -899,6 +1035,7 @@
         }
       });
     }
+
     function getExecutionDateKey(row) {
       const concreteEndRaw = row?.asbuilt_concreteEnd || row?.asbuilt_concreteend || row?.asbuilt_ConcreteEnd;
       const concreteEnd = concreteEndRaw ? new Date(concreteEndRaw) : null;
@@ -940,6 +1077,11 @@
         : (isExecutedRow(row) ? MAP_PREMIUM.colors.executed : MAP_PREMIUM.colors.remaining);
     }
     function getBaseOpacityForRecord(record) {
+      if (record?.elementType === 'kingpost') {
+        if (record?.stateKey === 'ready') return 0.94;
+        if (record?.stateKey === 'installed') return 0.9;
+        return 0.68;
+      }
       if (record?.executedYesterday) return Math.min(0.98, allBaseOpacity + 0.34);
       if (record?.executed) return Math.min(0.96, allBaseOpacity + 0.24);
       return Math.max(0.1, allBaseOpacity - 0.08);
@@ -956,6 +1098,7 @@
         return {
           row,
           id: normalizeId(row.id),
+          elementType: 'pile',
           lngLat,
           radiusM: getPileRadiusMeters(row),
           heightM: getVisiblePileHeight(row),
@@ -966,7 +1109,72 @@
       }).filter(Boolean);
     }
 
-    function getPileCentroid(records) {
+    function buildKingPostRecords(rows) {
+      return rows.map(row => {
+        const frontLngLat = dltmToWgs84(row.design_x, row.design_y);
+        const backLngLat = dltmToWgs84(row.design_back_x, row.design_back_y);
+        const centerLngLat = (
+          Number.isFinite(Number(row.design_x)) &&
+          Number.isFinite(Number(row.design_y)) &&
+          Number.isFinite(Number(row.design_back_x)) &&
+          Number.isFinite(Number(row.design_back_y))
+        )
+          ? dltmToWgs84(
+              (Number(row.design_x) + Number(row.design_back_x)) / 2,
+              (Number(row.design_y) + Number(row.design_back_y)) / 2
+            )
+          : null;
+        const lngLat = centerLngLat || frontLngLat;
+        if (!lngLat) return null;
+        const profile = parseKingPostProfile(row.profile);
+        const heightM = Math.max(parseNumber(row.design_depthdrilling), 0.5);
+        const stateKey = getKingPostStateKey(row);
+        return {
+          row,
+          id: normalizeId(row.pileId),
+          elementType: 'kingpost',
+          lngLat,
+          frontLngLat,
+          backLngLat,
+          radiusM: Math.max(profile.depthM, profile.widthM) * 0.55,
+          heightM,
+          profile,
+          color: getKingPostColor(row),
+          executed: stateKey === 'installed',
+          executedYesterday: false,
+          installed: stateKey === 'installed',
+          readyToInstall: stateKey === 'ready',
+          stateKey,
+          rotationZ: getKingPostRotationRadians(row)
+        };
+      }).filter(Boolean);
+    }
+
+    function getFocusedElementRecords(scope) {
+      if (!scope) {
+        return [...pileRecords, ...kingPostRecords];
+      }
+      const scopedPiles = allPiles.filter(row => matchesScope(row, scope));
+      const scopedKingPosts = allKingPosts.filter(row => matchesScope(row, scope));
+      if (!scopedPiles.length && !scopedKingPosts.length) {
+        const projectOnlyScope = { ...scope, plot: '' };
+        const projectOnlyPiles = allPiles.filter(row => matchesScope(row, projectOnlyScope));
+        const projectOnlyKingPosts = allKingPosts.filter(row => matchesScope(row, projectOnlyScope));
+        if (projectOnlyPiles.length || projectOnlyKingPosts.length) {
+          return [
+            ...buildPileRecords(projectOnlyPiles),
+            ...buildKingPostRecords(projectOnlyKingPosts)
+          ];
+        }
+        return [...pileRecords, ...kingPostRecords];
+      }
+      return [
+        ...buildPileRecords(scopedPiles),
+        ...buildKingPostRecords(scopedKingPosts)
+      ];
+    }
+
+    function getRecordCentroid(records) {
       if (!records.length) return DEFAULT_SITE_CENTER;
       const sum = records.reduce((acc, rec) => {
         acc[0] += rec.lngLat[0];
@@ -976,7 +1184,7 @@
       return [sum[0] / records.length, sum[1] / records.length];
     }
 
-    function getPileBounds(records) {
+    function getRecordBounds(records) {
       if (!records.length) return null;
       let minLng = Infinity;
       let maxLng = -Infinity;
@@ -1005,6 +1213,14 @@
         [minLng - lngPad, minLat - latPad],
         [maxLng + lngPad, maxLat + latPad]
       );
+    }
+
+    function getPileCentroid(records) {
+      return getRecordCentroid(records);
+    }
+
+    function getPileBounds(records) {
+      return getRecordBounds(records);
     }
 
     function todayKey() {
@@ -1281,9 +1497,9 @@
       planViewBtn.classList.toggle('active', !is3D);
       view3DBtn.classList.toggle('active', is3D);
       const scope = getActiveScope();
-      const focusedRecords = buildPileRecords(getFocusedPiles(scope));
-      const projectBounds = getPileBounds(focusedRecords);
-      const focusedCenter = getPileCentroid(focusedRecords);
+      const focusedRecords = getFocusedElementRecords(scope);
+      const projectBounds = getRecordBounds(focusedRecords);
+      const focusedCenter = getRecordCentroid(focusedRecords);
       const duration = options.instant ? 0 : (options.quick ? MAP_PREMIUM.camera.quickDuration : MAP_PREMIUM.camera.duration);
       const easing = MAP_PREMIUM.camera.easing;
 
@@ -1690,6 +1906,52 @@
       sidePanel.classList.add('open');
     }
 
+    function openKingPostPanel(record) {
+      const row = record.row;
+      panelTitle.textContent = `${row.pileId || 'KingPost'} • ${row.profile || 'UB Profile'}`;
+      panelBody.innerHTML = `
+        ${makeInfoSection('General', [
+          ['Element ID', row.pileId],
+          ['Element Type', row.elementType || 'KingPost'],
+          ['Project', row.project],
+          ['Plot', row.plot || '-'],
+          ['Section', row.section || '-'],
+          ['Building', row.building || '-']
+        ])}
+        ${makeInfoSection('Design', [
+          ['Profile', row.profile || '-'],
+          ['X', displayFixed(row.design_x, 3)],
+          ['Y', displayFixed(row.design_y, 3)],
+          ['Top Of Shoring', displaySigned(row.design_leveltopofshoring, 2)],
+          ['Platform Level', displaySigned(row.design_levelplatform, 2)],
+          ['Toe Level', displaySigned(row.design_leveltoe, 2)],
+          ['Depth Drilling', `${displayValue(row.design_depthdrilling, 2)} m`]
+        ])}
+        ${makeInfoSection('Asbuilt', [
+          ['Status', record.installed ? 'Beam Installed' : (record.readyToInstall ? 'Pre-drilled / Ready To Install' : 'Pending')],
+          ['Installed', record.installed ? 'Yes' : 'No'],
+          ['Operational Status', row.operationalStatus || '-'],
+          ['Beam Installation', row.beamInstallation ? formatDateTime(row.beamInstallation) : '-'],
+          ['Rig', row.asbuilt_rig1 || '-'],
+          ['Rig Depth', row.asbuilt_rig1depth ? `${displayValue(row.asbuilt_rig1depth, 2)} m` : '-'],
+          ['Drilling Start', row.asbuilt_drillingStart ? formatDateTime(row.asbuilt_drillingStart) : '-'],
+          ['Drilling End', row.asbuilt_drillingEnd ? formatDateTime(row.asbuilt_drillingEnd) : '-'],
+          ['Duration', row.asbuilt_durationdrilling ? `${displayValue(row.asbuilt_durationdrilling, 2)} hr` : '-'],
+          ['Asbuilt Depth', row.asbuilt_depth ? `${displayValue(row.asbuilt_depth, 2)} m` : '-'],
+          ['Over Excavation', row.asbuilt_overexcavation ? `${displayValue(row.asbuilt_overexcavation, 2)} m` : '-'],
+          ['WIR', row.asbuilt_wir || '-']
+        ])}`;
+      sidePanel.classList.add('open');
+    }
+
+    function openMapElementPanel(record) {
+      if (record?.elementType === 'kingpost') {
+        openKingPostPanel(record);
+        return;
+      }
+      openPilePanel(record);
+    }
+
     function refreshPileAppearance() {
       if (!pileLayer) return;
       pileLayer.meshes.forEach(mesh => {
@@ -1698,7 +1960,10 @@
         const isHovered = record.id === pileLayer.hoveredId;
         if (isSelected || isHovered) return;
         mesh.material.color.setHex(record.color);
-        if (record.executed) {
+        if (record.elementType === 'kingpost') {
+          mesh.material.emissive = new THREE.Color(getKingPostEmissiveColor(record));
+          mesh.material.emissiveIntensity = record.stateKey === 'installed' ? 0.24 : (record.stateKey === 'ready' ? 0.2 : 0.12);
+        } else if (record.executed) {
           mesh.material.emissive = new THREE.Color(record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : MAP_PREMIUM.colors.executedEmissive);
           mesh.material.emissiveIntensity = record.executedYesterday ? 0.62 : 0.34;
         } else {
@@ -1779,6 +2044,91 @@
       line.position.set(record._local3d.x, record._local3d.y, zOffset);
       line.renderOrder = 1200;
       return line;
+    }
+
+    function createKingPostShape(profile) {
+      const halfW = profile.widthM / 2;
+      const halfD = profile.depthM / 2;
+      const flange = profile.flangeThickness;
+      const web = profile.webThickness / 2;
+      const shape = new THREE.Shape();
+      shape.moveTo(-halfW, -halfD);
+      shape.lineTo(halfW, -halfD);
+      shape.lineTo(halfW, -halfD + flange);
+      shape.lineTo(web, -halfD + flange);
+      shape.lineTo(web, halfD - flange);
+      shape.lineTo(halfW, halfD - flange);
+      shape.lineTo(halfW, halfD);
+      shape.lineTo(-halfW, halfD);
+      shape.lineTo(-halfW, halfD - flange);
+      shape.lineTo(-web, halfD - flange);
+      shape.lineTo(-web, -halfD + flange);
+      shape.lineTo(-halfW, -halfD + flange);
+      shape.closePath();
+      return shape;
+    }
+
+    function createKingPostMesh(record, localX, localY) {
+      const height = record.heightM;
+      const shape = createKingPostShape(record.profile);
+      const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: height,
+        bevelEnabled: false,
+        curveSegments: 1,
+        steps: 1
+      });
+      geometry.translate(0, 0, -height);
+      const material = new THREE.MeshPhongMaterial({
+        color: record.color,
+        transparent: true,
+        opacity: getNormalOpacity(record),
+        shininess: 155,
+        specular: 0xffffff,
+        flatShading: false,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      const edgeGeometry = new THREE.EdgesGeometry(geometry, 10);
+      const edgeMaterial = new THREE.LineBasicMaterial({
+        color: getKingPostEdgeColor(record),
+        transparent: true,
+        opacity: 0.96,
+        depthTest: false,
+        depthWrite: false
+      });
+      const edgeLines = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+      edgeLines.renderOrder = 1000;
+      mesh.add(edgeLines);
+      const highlightMaterial = new THREE.LineBasicMaterial({
+        color: getKingPostHighlightEdgeColor(record),
+        transparent: true,
+        opacity: 0.34,
+        depthTest: false,
+        depthWrite: false
+      });
+      const highlightEdges = new THREE.LineSegments(edgeGeometry.clone(), highlightMaterial);
+      highlightEdges.scale.set(1.012, 1.012, 1.0);
+      highlightEdges.renderOrder = 1001;
+      mesh.add(highlightEdges);
+      mesh.userData.record = record;
+      mesh.userData.originalHeight = height;
+      mesh.userData.anchorMode = 'top';
+      mesh.position.set(localX, localY, -0.02);
+      mesh.rotation.z = Number(record.rotationZ || 0);
+      record._local3d = {
+        x: localX,
+        y: localY,
+        zCenter: -0.02,
+        height,
+        effectiveHeight: height,
+        radius: record.radiusM,
+        topZ: -0.02
+      };
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 998;
+      return mesh;
     }
 
     class ThreePileLayer {
@@ -1864,6 +2214,7 @@
           const mesh = new THREE.Mesh(geometry, material);
           mesh.userData.record = record;
           mesh.userData.originalHeight = height;
+          mesh.userData.anchorMode = 'center';
           mesh.position.set(localX, localY, -(height / 2 + 0.02));
           record._local3d = { x: localX, y: localY, zCenter: -(height / 2 + 0.02), height, effectiveHeight: height, radius, topZ: -0.02 };
           mesh.frustumCulled = false;
@@ -1877,6 +2228,15 @@
             this.testIndicators.push(indicator);
           }
         });
+
+        kingPostRecords.forEach(record => {
+          const merc = mapboxgl.MercatorCoordinate.fromLngLat(record.lngLat, 0);
+          const localX = (merc.x - this.centerMerc.x) / this.modelTransform.scale;
+          const localY = (merc.y - this.centerMerc.y) / this.modelTransform.scale;
+          const mesh = createKingPostMesh(record, localX, localY);
+          this.rootGroup.add(mesh);
+          this.meshes.push(mesh);
+        });
         this.applySatelliteMode(this.isSatelliteMode);
       }
 
@@ -1888,7 +2248,7 @@
           if (!originalHeight || !record?._local3d) return;
           const visibleHeight = originalHeight;
           mesh.scale.z = visibleHeight / originalHeight;
-          mesh.position.z = -(visibleHeight / 2 + 0.02);
+          mesh.position.z = mesh.userData.anchorMode === 'top' ? -0.02 : -(visibleHeight / 2 + 0.02);
           record._local3d.effectiveHeight = visibleHeight;
           record._local3d.zCenter = mesh.position.z;
         });
@@ -1903,16 +2263,26 @@
           const isSelected = record.id === recordId;
           const isExecuted = record.executed;
           if (isSelected) {
-            const selectedColor = isExecuted ? (record.executedYesterday ? 0xffc162 : 0x38ff9d) : MAP_PREMIUM.colors.selected;
-            const emissiveColor = isExecuted ? (record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : MAP_PREMIUM.colors.executedEmissive) : MAP_PREMIUM.colors.remainingEmissive;
+            const selectedColor = record.elementType === 'kingpost'
+              ? (record.stateKey === 'installed' ? 0xeef6ff : (record.stateKey === 'ready' ? 0xffd9a5 : 0xf5e6cf))
+              : (isExecuted ? (record.executedYesterday ? 0xffc162 : 0x38ff9d) : MAP_PREMIUM.colors.selected);
+            const emissiveColor = record.elementType === 'kingpost'
+              ? getKingPostEmissiveColor(record)
+              : (isExecuted ? (record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : MAP_PREMIUM.colors.executedEmissive) : MAP_PREMIUM.colors.remainingEmissive);
             mesh.material.color.setHex(selectedColor);
             mesh.material.emissive = new THREE.Color(emissiveColor);
-            mesh.material.emissiveIntensity = record.executedYesterday ? 1.0 : 0.88;
+            mesh.material.emissiveIntensity = record.elementType === 'kingpost' ? 0.92 : (record.executedYesterday ? 1.0 : 0.88);
             mesh.material.opacity = 0.92;
           } else {
             mesh.material.color.setHex(record.color);
-            mesh.material.emissive = new THREE.Color(record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : (record.executed ? MAP_PREMIUM.colors.executedEmissive : MAP_PREMIUM.colors.remainingEmissive));
-            mesh.material.emissiveIntensity = record.executedYesterday ? 0.62 : (record.executed ? 0.34 : 0.03);
+            mesh.material.emissive = new THREE.Color(
+              record.elementType === 'kingpost'
+                ? getKingPostEmissiveColor(record)
+                : (record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : (record.executed ? MAP_PREMIUM.colors.executedEmissive : MAP_PREMIUM.colors.remainingEmissive))
+            );
+            mesh.material.emissiveIntensity = record.elementType === 'kingpost'
+              ? (record.stateKey === 'installed' ? 0.32 : (record.stateKey === 'ready' ? 0.48 : 0.16))
+              : (record.executedYesterday ? 0.62 : (record.executed ? 0.34 : 0.03));
             mesh.material.opacity = getNormalOpacity(record);
           }
         });
@@ -1928,16 +2298,26 @@
           const isHovered = record.id === recordId && !isSelected;
           if (isSelected) return;
           if (isHovered) {
-            const hoverColor = record.executed ? (record.executedYesterday ? 0xffc162 : 0x36ff9c) : 0xffffff;
-            const hoverEmissive = record.executed ? (record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : MAP_PREMIUM.colors.executedEmissive) : MAP_PREMIUM.colors.remainingEmissive;
+            const hoverColor = record.elementType === 'kingpost'
+              ? (record.stateKey === 'installed' ? 0xaad4ff : (record.stateKey === 'ready' ? 0xffc979 : 0xf0d4a9))
+              : (record.executed ? (record.executedYesterday ? 0xffc162 : 0x36ff9c) : 0xffffff);
+            const hoverEmissive = record.elementType === 'kingpost'
+              ? getKingPostEmissiveColor(record)
+              : (record.executed ? (record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : MAP_PREMIUM.colors.executedEmissive) : MAP_PREMIUM.colors.remainingEmissive);
             mesh.material.color.setHex(hoverColor);
             mesh.material.emissive = new THREE.Color(hoverEmissive);
-            mesh.material.emissiveIntensity = record.executedYesterday ? 0.86 : 0.58;
+            mesh.material.emissiveIntensity = record.elementType === 'kingpost' ? (record.stateKey === 'ready' ? 0.72 : 0.62) : (record.executedYesterday ? 0.86 : 0.58);
             mesh.material.opacity = Math.min(0.94, getNormalOpacity(record) + 0.2);
           } else {
             mesh.material.color.setHex(record.color);
-            mesh.material.emissive = new THREE.Color(record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : (record.executed ? MAP_PREMIUM.colors.executedEmissive : MAP_PREMIUM.colors.remainingEmissive));
-            mesh.material.emissiveIntensity = record.executedYesterday ? 0.62 : (record.executed ? 0.34 : 0.03);
+            mesh.material.emissive = new THREE.Color(
+              record.elementType === 'kingpost'
+                ? getKingPostEmissiveColor(record)
+                : (record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : (record.executed ? MAP_PREMIUM.colors.executedEmissive : MAP_PREMIUM.colors.remainingEmissive))
+            );
+            mesh.material.emissiveIntensity = record.elementType === 'kingpost'
+              ? (record.stateKey === 'installed' ? 0.32 : (record.stateKey === 'ready' ? 0.48 : 0.16))
+              : (record.executedYesterday ? 0.62 : (record.executed ? 0.34 : 0.03));
             mesh.material.opacity = getNormalOpacity(record);
           }
         });
@@ -1969,13 +2349,14 @@
       pickByBody(point, maxDistancePx = 16) {
         let nearest = null;
         let nearestDistance = Infinity;
-        for (const record of pileRecords) {
+        for (const record of [...pileRecords, ...kingPostRecords]) {
           if (!record._local3d) continue;
-          const top = this.projectLocalPointToScreen(new THREE.Vector3(record._local3d.x, record._local3d.y, record._local3d.topZ || -0.02));
+          const topZ = record._local3d.topZ || -0.02;
+          const top = this.projectLocalPointToScreen(new THREE.Vector3(record._local3d.x, record._local3d.y, topZ));
           const bodyHeight = Number(record._local3d.effectiveHeight || record._local3d.height || 0);
-          const bottom = this.projectLocalPointToScreen(new THREE.Vector3(record._local3d.x, record._local3d.y, -bodyHeight));
+          const bottom = this.projectLocalPointToScreen(new THREE.Vector3(record._local3d.x, record._local3d.y, topZ - bodyHeight));
           if (!top || !bottom) continue;
-          const side = this.projectLocalPointToScreen(new THREE.Vector3(record._local3d.x + record._local3d.radius, record._local3d.y, record._local3d.topZ || -0.02));
+          const side = this.projectLocalPointToScreen(new THREE.Vector3(record._local3d.x + record._local3d.radius, record._local3d.y, topZ));
           const radiusPx = side ? Math.max(6, Math.hypot(side.x - top.x, side.y - top.y)) : 8;
           const distance = distancePointToSegment(point, top, bottom) - radiusPx;
           if (distance < nearestDistance) {
@@ -2186,9 +2567,9 @@
       return Math.hypot(point.x - projX, point.y - projY);
     }
 
-    function getNearestPileRecordFromPoint(point, maxDistancePx = 30) {
+    function getNearestMapElementRecordFromPoint(point, maxDistancePx = 30) {
       let nearest = null, nearestDistance = Infinity;
-      for (const record of pileRecords) {
+      for (const record of [...pileRecords, ...kingPostRecords]) {
         const projected = map.project(record.lngLat);
         const dx = projected.x - point.x, dy = projected.y - point.y;
         const distance = Math.hypot(dx, dy);
@@ -2205,7 +2586,7 @@
       if (raycastRecord) return raycastRecord;
       const bodyRecord = pileLayer.pickByBody(point, 18);
       if (bodyRecord) return bodyRecord;
-      return getNearestPileRecordFromPoint(point, nearestMaxPx);
+      return getNearestMapElementRecordFromPoint(point, nearestMaxPx);
     }
 
     let htmlPileLabels = [];
@@ -2218,7 +2599,7 @@
     function addLabelLayer() {
       clearHtmlLabels();
       if (isMapInteracting) return;
-      pileRecords.forEach(record => {
+      [...pileRecords, ...kingPostRecords].forEach(record => {
         const wrap = document.createElement('div');
         wrap.className = 'pile-label-marker';
 
@@ -2228,7 +2609,9 @@
 
         const typeEl = document.createElement('div');
         typeEl.className = 'pile-label-type';
-        typeEl.textContent = record.row.pileType || '';
+        typeEl.textContent = record.elementType === 'kingpost'
+          ? ''
+          : (record.row.pileType || '');
 
         wrap.appendChild(idEl);
         wrap.appendChild(typeEl);
@@ -2249,14 +2632,30 @@
       const scope = getActiveScope();
       if (!scope) return false;
 
-      const res = await fetch(JSON_URL, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const [pileRes, kingPostRows] = await Promise.all([
+        fetch(JSON_URL, { cache: 'no-store' }),
+        (async () => {
+          try {
+            const res = await fetch(KINGPOST_JSON_URL, { cache: 'no-store' });
+            if (!res.ok) return [];
+            const data = await res.json();
+            const rows = Array.isArray(data) ? data : (data.body || []);
+            return rows.map(sanitizeKingPostRow);
+          } catch (err) {
+            console.warn('KingPost source load skipped:', err);
+            return [];
+          }
+        })()
+      ]);
+      if (!pileRes.ok) throw new Error(`HTTP ${pileRes.status}`);
+      const data = await pileRes.json();
       const rawPiles = Array.isArray(data) ? data : (data.piles || []);
       allPiles = rawPiles;
+      allKingPosts = kingPostRows;
       pileRecords = buildPileRecords(allPiles);
+      kingPostRecords = buildKingPostRecords(allKingPosts);
       chartData = aggregateDailyData(allPiles);
-      SITE_CENTER = getPileCentroid(pileRecords);
+      SITE_CENTER = getRecordCentroid([...pileRecords, ...kingPostRecords]);
       map.setCenter(SITE_CENTER);
       if (!pileLayer) {
         pileLayer = new ThreePileLayer('threejs-piles');
@@ -2318,7 +2717,7 @@
       const record = getPileRecordFromInteraction(e.point, 38);
       if (!record) return;
       if (pileLayer) pileLayer.setHighlightedPile(record.id);
-      openPilePanel(record);
+      openMapElementPanel(record);
     });
 
     map.on('dragstart', () => {
@@ -2384,7 +2783,9 @@
               ...stored,
               ...payload,
               selectedProject: payload.project || stored.selectedProject || stored.project,
-              selectedPlot: payload.plot || stored.selectedPlot || stored.plot
+              selectedPlot: Object.prototype.hasOwnProperty.call(payload, 'plot')
+                ? (payload.plot ?? '')
+                : (stored.selectedPlot || stored.plot)
             };
               window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged));
             } catch (err) {}
@@ -2401,6 +2802,7 @@
             }
             if (allPiles.length) {
               pileRecords = buildPileRecords(allPiles);
+              kingPostRecords = buildKingPostRecords(allKingPosts);
               chartData = aggregateDailyData(allPiles);
               if (pileLayer) {
                 pileLayer.buildPiles();

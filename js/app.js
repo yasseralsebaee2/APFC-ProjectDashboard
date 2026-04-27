@@ -1,4 +1,5 @@
     const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-pile-asbuilt.json_';
+    const KINGPOST_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-kingpost-asbuilt.json_';
     const USERS_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-users.json_';
     const MANPOWER_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc_manpower.json_';
     const COMPANY_MANPOWER_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc_manpowers.json_';
@@ -53,6 +54,14 @@
       chartSvg: document.getElementById('chartSvg'),
       chartTooltip: document.getElementById('chartTooltip'),
       overviewSeriesLegend: document.getElementById('overviewSeriesLegend'),
+      overviewActivityButtons: Array.from(document.querySelectorAll('#overviewActivityToggle button')),
+      overviewActivityToggle: document.getElementById('overviewActivityToggle'),
+      overviewMatrixTitle: document.getElementById('overviewMatrixTitle'),
+      overviewMatrixTag: document.getElementById('overviewMatrixTag'),
+      overviewMatrixHead1: document.getElementById('overviewMatrixHead1'),
+      overviewMatrixHead2: document.getElementById('overviewMatrixHead2'),
+      overviewMatrixHead3: document.getElementById('overviewMatrixHead3'),
+      overviewMatrixHead4: document.getElementById('overviewMatrixHead4'),
 
       timelineStartDate: document.getElementById('timelineStartDate'),
       timelineEndDate: document.getElementById('timelineEndDate'),
@@ -64,6 +73,12 @@
       timelinePileSearch: document.getElementById('timelinePileSearch'),
       timelinePileList: document.getElementById('timelinePileList'),
       timelineTableBody: document.getElementById('timelineTableBody'),
+      timelineHeadDrilling: document.getElementById('timelineHeadDrilling'),
+      timelineHeadCage: document.getElementById('timelineHeadCage'),
+      timelineHeadPouring: document.getElementById('timelineHeadPouring'),
+      timelineHeadGap1: document.getElementById('timelineHeadGap1'),
+      timelineHeadGap2: document.getElementById('timelineHeadGap2'),
+      timelineHeadGross: document.getElementById('timelineHeadGross'),
       timelineScopeCount: document.getElementById('timelineScopeCount'),
       timelineChartWrap: document.getElementById('timelineChartWrap'),
       timelineSvg: document.getElementById('timelineSvg'),
@@ -84,6 +99,11 @@
       timelineCycleAvg: document.getElementById('timelineCycleAvg'),
       timelinePieSvg: document.getElementById('timelinePieSvg'),
       timelinePieTotal: document.getElementById('timelinePieTotal'),
+      timelineLegendDrilling: document.getElementById('timelineLegendDrilling'),
+      timelineLegendGap1: document.getElementById('timelineLegendGap1'),
+      timelineLegendCage: document.getElementById('timelineLegendCage'),
+      timelineLegendGap2: document.getElementById('timelineLegendGap2'),
+      timelineLegendPouring: document.getElementById('timelineLegendPouring'),
 
       granularityToggleButtons: Array.from(document.querySelectorAll('#granularityToggleGroup .chart-toggle')),
       modeLabelCumulative: document.getElementById('modeLabelCumulative'),
@@ -159,6 +179,7 @@
     };
 
     let rawRows = [];
+    let kingPostRows = [];
     let manpowerRows = [];
     let companyManpowerRows = [];
     let equipmentRegistryRows = [];
@@ -180,6 +201,7 @@
     let companyHeatmapExpandedDesignations = new Set();
     let utilizationMode = 'daily';
     let overviewDateMode = 'shift'; // shared reporting mode for Overview + Production only
+    let overviewActivityMode = 'piles';
     let prodState = {
       gross: 'day',
       drilling: 'day',
@@ -622,16 +644,17 @@
     }
 
     function syncProjectScopeFromData() {
-      if (!rawRows.length) return;
+      const projects = getCombinedProjectList();
+      if (!projects.length) return;
 
       if (canSelectProjects()) {
-        const projects = getProjectList(rawRows).filter(project => normalizeText(project).toLowerCase() !== 'all');
-        if (projects.length) {
-          const currentProjectIsValid = projects.includes(selectedProject);
+        const selectableProjects = projects.filter(project => normalizeText(project).toLowerCase() !== 'all');
+        if (selectableProjects.length) {
+          const currentProjectIsValid = selectableProjects.includes(selectedProject);
           if (!currentProjectIsValid) {
-            selectedProject = projects.includes(DEFAULT_PROJECT) ? DEFAULT_PROJECT : projects[0];
+            selectedProject = selectableProjects.includes(DEFAULT_PROJECT) ? DEFAULT_PROJECT : selectableProjects[0];
           }
-          renderProjectOptions(projects);
+          renderProjectOptions(selectableProjects);
         }
         persistScopedSession();
         return;
@@ -779,8 +802,45 @@
       return rows.filter(isExecutedRow);
     }
 
+    function extractKingPostList(data) {
+      const rows = Array.isArray(data)
+        ? data
+        : (Array.isArray(data?.body) ? data.body : []);
+      return rows
+        .filter(row => row && typeof row === 'object')
+        .map(row => ({
+          project: normalizeText(row.project || row.Project),
+          plot: normalizeText(row.plot || row.Plot),
+          elementType: normalizeText(row.elementType || row.ElementType || 'KingPost'),
+          id: normalizeText(row.pileId || row.PileID),
+          profile: normalizeText(row.profile || row.Profile),
+          operationalStatus: normalizeText(row.operationalStatus || row.OperationalStatus),
+          isInstalled: row.isInstalled ?? row.IsInstalled ?? null,
+          beamInstallation: normalizeText(row.beamInstallation || row.BeamInstallation),
+          drillingStart: normalizeText(row.asbuilt_DrillingStart || row.asbuilt_drillingStart),
+          drillingEnd: normalizeText(row.asbuilt_DrillingEnd || row.asbuilt_drillingEnd),
+          drillingDuration: Number(row.asbuilt_DurationDrilling ?? row.asbuilt_durationdrilling ?? 0) || 0,
+          rig1: normalizeText(row.asbuilt_Rig1 || row.asbuilt_rig1),
+          rig1Depth: Number(row.asbuilt_Rig1Depth ?? row.asbuilt_rig1depth ?? 0) || 0,
+          designDepthDrilling: Number(row.design_DepthDrilling ?? row.design_depthdrilling ?? 0) || 0,
+          asbuiltDepth: Number(row.asbuilt_depth ?? row.asbuilt_DepthDrillingFromPlatform ?? 0) || 0,
+          section: normalizeText(row.section || row.Section),
+          building: normalizeText(row.building || row.Building)
+        }));
+    }
+
     function getProjectList(rows) {
       const projects = Array.from(new Set(rows.map(r => normalizeText(r.project)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      if (projects.includes(DEFAULT_PROJECT)) {
+        return [DEFAULT_PROJECT, ...projects.filter(project => project !== DEFAULT_PROJECT)];
+      }
+      return projects;
+    }
+
+    function getCombinedProjectList() {
+      const pileProjects = rawRows.map(r => normalizeText(r.project));
+      const kingPostProjects = kingPostRows.map(r => normalizeText(r.project));
+      const projects = Array.from(new Set([...pileProjects, ...kingPostProjects].filter(Boolean))).sort((a, b) => a.localeCompare(b));
       if (projects.includes(DEFAULT_PROJECT)) {
         return [DEFAULT_PROJECT, ...projects.filter(project => project !== DEFAULT_PROJECT)];
       }
@@ -797,15 +857,140 @@
       });
     }
 
+    function getKingPostRowsForProject(project) {
+      const rawProject = normalizeText(project || selectedProject || DEFAULT_PROJECT);
+      const targetProject = isAllProjectsValue(rawProject) ? '' : rawProject;
+      return kingPostRows.filter(r => {
+        const projectMatch = !targetProject || normalizeText(r.project) === targetProject;
+        const plotMatch = isAllPlotsValue(selectedPlot) || normalizeText(r.plot) === normalizeText(selectedPlot);
+        return projectMatch && plotMatch;
+      });
+    }
+
+    function hasPileActivity(project) {
+      return getRowsForProject(project).length > 0;
+    }
+
+    function hasKingPostActivity(project) {
+      return getKingPostRowsForProject(project).length > 0;
+    }
+
+    function getAvailableOverviewActivities(project = selectedProject) {
+      const activities = [];
+      if (hasPileActivity(project)) activities.push('piles');
+      if (hasKingPostActivity(project)) activities.push('kingposts');
+      return activities;
+    }
+
+    function syncOverviewActivityMode(project = selectedProject) {
+      const available = getAvailableOverviewActivities(project);
+      if (!available.length) {
+        overviewActivityMode = 'piles';
+      } else if (!available.includes(overviewActivityMode)) {
+        overviewActivityMode = available[0];
+      }
+
+      if (els.overviewActivityToggle) {
+        const showToggle = available.length > 1;
+        els.overviewActivityToggle.hidden = !showToggle;
+        els.overviewActivityToggle.style.display = showToggle ? '' : 'none';
+      }
+
+      if (els.overviewActivityButtons?.length) {
+        els.overviewActivityButtons.forEach(btn => {
+          const mode = btn.dataset.activity;
+          btn.classList.toggle('active', mode === overviewActivityMode);
+          btn.hidden = !available.includes(mode);
+          btn.style.display = available.includes(mode) ? '' : 'none';
+        });
+      }
+    }
+
+    function getOverviewMetricConfig() {
+      if (overviewActivityMode === 'kingposts') {
+        return [
+          { key: 'predrilled', label: 'Pre-Drilled', unit: 'kp' },
+          { key: 'installed', label: 'Installed', unit: 'kp' },
+          { key: 'lm', label: 'Lm', unit: 'Lm' }
+        ];
+      }
+      return [
+        { key: 'piles', label: 'Piles', unit: 'piles' },
+        { key: 'lm', label: 'Lm', unit: 'Lm' },
+        { key: 'm3', label: 'm3', unit: 'm3' }
+      ];
+    }
+
+    function syncOverviewMetricButtons() {
+      const config = getOverviewMetricConfig();
+      const validMetrics = config.map(item => item.key);
+      if (!validMetrics.includes(chartMetric)) {
+        chartMetric = config[0]?.key || 'piles';
+      }
+      els.metricToggleButtons.forEach((btn, idx) => {
+        const item = config[idx];
+        if (!item) {
+          btn.hidden = true;
+          btn.style.display = 'none';
+          return;
+        }
+        btn.hidden = false;
+        btn.style.display = '';
+        btn.dataset.metric = item.key;
+        btn.textContent = item.label;
+        btn.classList.toggle('active', item.key === chartMetric);
+      });
+    }
+
+    function isKingPostInstalled(row) {
+      const installedValue = normalizeText(row?.isInstalled).toLowerCase();
+      return installedValue === 'true' || installedValue === 'yes' || installedValue === '1' || !!normalizeText(row?.beamInstallation);
+    }
+
+    function isKingPostPreDrilled(row) {
+      return normalizeText(row?.operationalStatus).toLowerCase() === 'readytoinstall';
+    }
+
+    function getKingPostMetricDateKey(row, metric) {
+      const raw = metric === 'installed'
+        ? normalizeText(row?.beamInstallation)
+        : (normalizeText(row?.drillingEnd) || normalizeText(row?.drillingStart));
+      if (!raw) return '';
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return '';
+      if (overviewDateMode === 'calendar') return formatDateKeyInTimezone(d);
+      const totalMinutes = d.getUTCHours() * 60 + d.getUTCMinutes();
+      if (totalMinutes < (7 * 60)) {
+        d.setUTCDate(d.getUTCDate() - 1);
+      }
+      return d.toISOString().slice(0, 10);
+    }
+
+    function isKingPostMetricRow(row, metric) {
+      if (metric === 'installed') return isKingPostInstalled(row);
+      if (metric === 'predrilled') return isKingPostPreDrilled(row);
+      if (metric === 'lm') return !!getKingPostMetricDateKey(row, 'predrilled');
+      return false;
+    }
+
     function metricLabel(metric) {
+      const config = getOverviewMetricConfig().find(item => item.key === metric);
+      if (config?.label) return config.label;
       return metric === 'piles' ? 'Piles' : metric === 'lm' ? 'Lm' : 'm3';
     }
 
     function metricUnit(metric) {
+      const config = getOverviewMetricConfig().find(item => item.key === metric);
+      if (config?.unit) return config.unit;
       return metric === 'piles' ? 'piles' : metric === 'lm' ? 'Lm' : 'mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³';
     }
 
     function metricValueForRow(row, metric) {
+      if (metric === 'predrilled' || metric === 'installed') return 1;
+      if (metric === 'lm') {
+        const n = Number(row.asbuilt_depth ?? row.asbuiltDepth ?? row.designDepthDrilling ?? row.design_depthdrilling);
+        if (Number.isFinite(n)) return n;
+      }
       if (metric === 'piles') return 1;
       if (metric === 'lm') {
         const n = Number(row.asbuilt_depth);
@@ -944,6 +1129,100 @@
       return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
     }
 
+    function aggregateKingPostMetrics(rows, metric) {
+      const map = new Map();
+      const metricRows = rows.filter(row => isKingPostMetricRow(row, metric));
+      const dates = metricRows.map(row => getKingPostMetricDateKey(row, metric)).filter(Boolean).sort();
+      if (!dates.length) return [];
+
+      const firstKey = periodKey(dates[0], chartGranularity);
+      const rangeEndKey = overviewDateMode === 'calendar' ? todayKey() : previousDayKey();
+      const lastKey = periodKey(rangeEndKey, chartGranularity);
+      let cursor = new Date(firstKey + 'T00:00:00Z');
+      const end = new Date(lastKey + 'T00:00:00Z');
+
+      while (cursor <= end) {
+        const key = cursor.toISOString().slice(0, 10);
+        map.set(key, { date: key, value: 0, executedCount: 0, items: [] });
+        cursor = incrementPeriod(cursor, chartGranularity);
+      }
+
+      metricRows.forEach(row => {
+        const date = getKingPostMetricDateKey(row, metric);
+        if (!date) return;
+        const key = periodKey(date, chartGranularity);
+        if (!map.has(key)) return;
+        const item = map.get(key);
+        item.value += metricValueForRow(row, metric);
+        item.executedCount += 1;
+        item.items.push({
+          id: normalizeText(row.id) || '-',
+          machine: normalizeText(row.rig1) || '-',
+          date,
+          profile: normalizeText(row.profile) || '-',
+          status: isKingPostInstalled(row) ? 'Installed' : (isKingPostPreDrilled(row) ? 'Pre-Drilled' : 'Pending')
+        });
+      });
+
+      return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    function lastCalendarDaysKingPostMetric(rows, metric, calendarDayCount = 7) {
+      const metricRows = rows.filter(row => isKingPostMetricRow(row, metric));
+      const allDates = Array.from(new Set(metricRows.map(row => getKingPostMetricDateKey(row, metric)).filter(Boolean))).sort();
+      if (!allDates.length) return 0;
+      const latestDate = allDates[allDates.length - 1];
+      const endDate = new Date(`${latestDate}T00:00:00Z`);
+      const startDate = new Date(endDate);
+      startDate.setUTCDate(endDate.getUTCDate() - (calendarDayCount - 1));
+      const startKey = startDate.toISOString().slice(0, 10);
+      const rowsInWindow = metricRows.filter(row => {
+        const dateKey = getKingPostMetricDateKey(row, metric);
+        return dateKey && dateKey >= startKey && dateKey <= latestDate;
+      });
+      const divisor = calendarDayCount || 1;
+      if (metric === 'lm') {
+        const total = rowsInWindow.reduce((sum, row) => sum + metricValueForRow(row, 'lm'), 0);
+        return total / divisor;
+      }
+      return rowsInWindow.length / divisor;
+    }
+
+    function computeKingPostStats(rows) {
+      const total = rows.length;
+      const installedRows = rows.filter(isKingPostInstalled);
+      const predrilledRows = rows.filter(isKingPostPreDrilled);
+      const completed = installedRows.length;
+      const predrilled = predrilledRows.length;
+      const remaining = Math.max(0, total - completed);
+      const progress = total ? (completed / total) * 100 : 0;
+      const activeRigs = new Set(rows.map(r => normalizeText(r.rig1)).filter(Boolean)).size;
+      const installedDates = Array.from(new Set(installedRows.map(r => getKingPostMetricDateKey(r, 'installed')).filter(Boolean))).sort();
+      const predrilledDates = Array.from(new Set(predrilledRows.map(r => getKingPostMetricDateKey(r, 'predrilled')).filter(Boolean))).sort();
+      const avgInstalledRaw = installedDates.length > 0 && installedDates.length < 6
+        ? (completed / installedDates.length)
+        : lastCalendarDaysKingPostMetric(rows, 'installed', 7) * (7 / 6);
+      const avgPredrilledRaw = predrilledDates.length > 0 && predrilledDates.length < 6
+        ? (predrilled / predrilledDates.length)
+        : lastCalendarDaysKingPostMetric(rows, 'predrilled', 7) * (7 / 6);
+      const avgLmRaw = predrilledDates.length > 0 && predrilledDates.length < 6
+        ? (predrilledRows.reduce((sum, row) => sum + metricValueForRow(row, 'lm'), 0) / predrilledDates.length)
+        : lastCalendarDaysKingPostMetric(rows, 'lm', 7) * (7 / 6);
+      const avgInstalled = avgInstalledRaw > 0 ? Math.round(avgInstalledRaw * 10) / 10 : 0;
+      const avgPredrilled = avgPredrilledRaw > 0 ? Math.round(avgPredrilledRaw * 10) / 10 : 0;
+      const avgLm = avgLmRaw > 0 ? Math.round(avgLmRaw * 10) / 10 : 0;
+      const yesterdayInstalled = aggregateKingPostMetrics(rows, 'installed').find(x => x.date === previousDayKey())?.executedCount || 0;
+      let etaDate = '';
+      let etaMonths = null;
+      const etaRate = avgInstalledRaw || avgPredrilledRaw;
+      if (remaining > 0 && etaRate > 0) {
+        const workingDaysNeeded = Math.ceil(remaining / etaRate);
+        etaDate = addWorkingDays(todayKey(), workingDaysNeeded);
+        etaMonths = monthsBetween(todayKey(), etaDate);
+      }
+      return { total, completed, predrilled, remaining, activeRigs, avgInstalled, avgPredrilled, avgLm, progress, yesterdayInstalled, etaDate, etaMonths };
+    }
+
     function lastCalendarDaysMetric(rows, metric, calendarDayCount = 7) {
       const executedRows = getExecutedRows(rows).filter(r => getOverviewDateKey(r));
       if (!executedRows.length) return 0;
@@ -1060,6 +1339,36 @@
     }
 
     function renderExecutionMatrix(rows) {
+      if (overviewActivityMode === 'kingposts') {
+        const items = rows
+          .map(row => {
+            const installedDate = getKingPostMetricDateKey(row, 'installed');
+            const predrilledDate = getKingPostMetricDateKey(row, 'predrilled');
+            const status = isKingPostInstalled(row) ? 'Installed' : (isKingPostPreDrilled(row) ? 'Pre-Drilled' : 'Pending');
+            const dateKey = installedDate || predrilledDate;
+            return {
+              id: normalizeText(row.id) || '-',
+              depth: metricValueForRow(row, 'lm'),
+              status,
+              date: dateKey
+            };
+          })
+          .filter(item => item.date)
+          .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id, undefined, { numeric: true }));
+
+        if (!items.length) {
+          els.matrixBody.innerHTML = '<tr><td colspan="4" style="padding:14px;color:var(--muted);">No kingpost activity available.</td></tr>';
+          return;
+        }
+
+        let html = '';
+        items.forEach(item => {
+          html += `<tr><td>${formatDateFullLabel(item.date)}</td><td class="id-cell">${item.id}</td><td class="num">${item.depth.toFixed(2)}</td><td>${item.status}</td></tr>`;
+        });
+        els.matrixBody.innerHTML = html;
+        return;
+      }
+
       const executed = getExecutedRows(rows)
         .filter(row => getOverviewDateKey(row))
         .sort((a, b) =>
@@ -1186,6 +1495,75 @@
         .sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
     }
 
+    function aggregateKingPostAverageBy(rows, valueGetter, groupBy, dateGetter) {
+      const map = new Map();
+      rows.forEach(row => {
+        const raw = Number(valueGetter(row));
+        if (!Number.isFinite(raw)) return;
+        const reportDate = dateGetter(row);
+        if (!reportDate) return;
+
+        let key = '';
+        if (groupBy === 'pile') key = normalizeText(row.id) || '-';
+        else if (groupBy === 'cw') key = getCW(reportDate);
+        else key = reportDate;
+
+        if (!map.has(key)) map.set(key, { key, sum: 0, count: 0, items: [] });
+        const item = map.get(key);
+        item.sum += raw;
+        item.count += 1;
+        item.items.push({
+          id: normalizeText(row.id) || '-',
+          value: raw,
+          date: reportDate,
+          cw: getCW(reportDate)
+        });
+      });
+
+      return Array.from(map.values())
+        .map(item => ({
+          key: item.key,
+          avg: item.count ? item.sum / item.count : 0,
+          count: item.count,
+          items: item.items.sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id.localeCompare(b.id, undefined, { numeric: true }))
+        }))
+        .sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
+    }
+
+    function aggregateKingPostCountBy(rows, groupBy, dateGetter, itemLabelGetter = null) {
+      const map = new Map();
+      rows.forEach(row => {
+        const reportDate = dateGetter(row);
+        if (!reportDate) return;
+
+        let key = '';
+        if (groupBy === 'pile') key = normalizeText(row.id) || '-';
+        else if (groupBy === 'cw') key = getCW(reportDate);
+        else key = reportDate;
+
+        if (!map.has(key)) map.set(key, { key, sum: 0, count: 0, items: [] });
+        const item = map.get(key);
+        item.sum += 1;
+        item.count += 1;
+        item.items.push({
+          id: normalizeText(row.id) || '-',
+          value: 1,
+          date: reportDate,
+          cw: getCW(reportDate),
+          label: itemLabelGetter ? itemLabelGetter(row) : ''
+        });
+      });
+
+      return Array.from(map.values())
+        .map(item => ({
+          key: item.key,
+          avg: item.sum,
+          count: item.count,
+          items: item.items.sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id.localeCompare(b.id, undefined, { numeric: true }))
+        }))
+        .sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
+    }
+
     function formatNumberOneDecimal(value) {
       return Number(value || 0).toFixed(1);
     }
@@ -1236,7 +1614,9 @@
 
       let html = `<div class="tooltip-title">${periodText}</div>`;
 
-      if (options.groupBy === 'day' || options.groupBy === 'cw') {
+      if (options.isCount) {
+        html += `<div class="tooltip-row"><span>${title}</span><strong>${valueFormatter(dataPoint.avg)}</strong></div>`;
+      } else if (options.groupBy === 'day' || options.groupBy === 'cw') {
         html += `<div class="tooltip-row"><span>AVG ${title}</span><strong>${valueFormatter(dataPoint.avg)}</strong></div>`;
       } else {
         html += `<div class="tooltip-row"><span>${title}</span><strong>${valueFormatter(dataPoint.avg)}</strong></div>`;
@@ -1245,7 +1625,10 @@
       if (options.groupBy === 'day' && Array.isArray(dataPoint.items) && dataPoint.items.length) {
         html += `<div class="tooltip-list">`;
         dataPoint.items.forEach(item => {
-          html += `<div class="tooltip-list-item"><span>${item.id || '-'}</span><span>${valueFormatter(item.value)}</span></div>`;
+          const rightValue = options.isCount
+            ? (item.label || item.id || '-')
+            : valueFormatter(item.value);
+          html += `<div class="tooltip-list-item"><span>${item.id || '-'}</span><span>${rightValue}</span></div>`;
         });
         html += `</div>`;
       }
@@ -1539,7 +1922,9 @@
     }
 
 function renderProductionMetricChart(project, key, forceAnimate = false) {
-      const rows = getRowsForProject(project);
+      const pileRows = getRowsForProject(project);
+      const kpRows = getKingPostRowsForProject(project);
+      const isKingPosts = overviewActivityMode === 'kingposts' && kpRows.length > 0;
       const configs = {
         gross: {
           svg: els.prodSvgs.gross,
@@ -1582,21 +1967,143 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const cfg = configs[key];
       if (!cfg || !cfg.svg) return;
 
+      if (isKingPosts) {
+        const kingPostConfigs = {
+          gross: {
+            data: aggregateKingPostCountBy(
+              kpRows.filter(isKingPostPreDrilled),
+              prodState.gross,
+              row => getKingPostMetricDateKey(row, 'predrilled'),
+              row => normalizeText(row.rig1) || 'Pre-Drilled'
+            ),
+            formatter: v => `${Math.round(v)}`,
+            options: { title: 'Pre-Drilled', groupBy: prodState.gross, isCount: true }
+          },
+          drilling: {
+            data: aggregateKingPostCountBy(
+              kpRows.filter(isKingPostInstalled),
+              prodState.drilling,
+              row => getKingPostMetricDateKey(row, 'installed'),
+              row => normalizeText(row.profile) || 'Installed'
+            ),
+            formatter: v => `${Math.round(v)}`,
+            options: { title: 'Beam Installation', groupBy: prodState.drilling, isCount: true }
+          },
+          cage: {
+            data: aggregateKingPostAverageBy(
+              kpRows,
+              row => row.drillingDuration,
+              prodState.cage,
+              row => getKingPostMetricDateKey(row, 'predrilled')
+            ),
+            formatter: v => formatNumberOneDecimal(v),
+            options: { title: 'Drilling Duration', groupBy: prodState.cage }
+          },
+          concrete: {
+            data: aggregateKingPostAverageBy(
+              kpRows,
+              row => row.asbuilt_overexcavation,
+              prodState.concrete,
+              row => getKingPostMetricDateKey(row, 'predrilled')
+            ),
+            formatter: v => `${formatNumberOneDecimal(v)} m`,
+            options: { title: 'Over Excavation', groupBy: prodState.concrete }
+          }
+        };
+        const kpCfg = kingPostConfigs[key];
+        if (!kpCfg) {
+          while (cfg.svg.firstChild) cfg.svg.removeChild(cfg.svg.firstChild);
+          return;
+        }
+        renderSmallBarChart(
+          cfg.svg,
+          kpCfg.data,
+          kpCfg.formatter,
+          { ...kpCfg.options, animate: forceAnimate || !productionChartsInitialized }
+        );
+        return;
+      }
+
       renderSmallBarChart(
         cfg.svg,
-        aggregateAverageBy(rows, cfg.field, cfg.options.groupBy),
+        aggregateAverageBy(pileRows, cfg.field, cfg.options.groupBy),
         cfg.formatter,
         { ...cfg.options, animate: forceAnimate || !productionChartsInitialized }
       );
     }
 
     function renderProductionPage(project, forceAnimate = false) {
-      ['gross', 'drilling', 'cage', 'concrete', 'overconsumption', 'overexcavation']
-        .forEach(key => renderProductionMetricChart(project, key, forceAnimate));
+      const cards = Array.from(document.querySelectorAll('#pageProduction .prod-card'));
+      const cardEls = {
+        gross: cards[0],
+        drilling: cards[1],
+        cage: cards[2],
+        concrete: cards[3],
+        overconsumption: cards[4],
+        overexcavation: cards[5]
+      };
+      const setCardMeta = (card, title, subtitle, tag, groups) => {
+        if (!card) return;
+        const titleEl = card.querySelector('.prod-title');
+        const subtitleEl = card.querySelector('.prod-subtitle');
+        const tagEl = card.querySelector('.panel-tag');
+        if (titleEl) titleEl.textContent = title;
+        if (subtitleEl) subtitleEl.textContent = subtitle;
+        if (tagEl) tagEl.textContent = tag;
+        const buttons = Array.from(card.querySelectorAll('.mini-toggle'));
+        buttons.forEach(btn => {
+          const visible = groups.includes(btn.dataset.group);
+          btn.hidden = !visible;
+          btn.style.display = visible ? '' : 'none';
+          btn.classList.toggle('active', prodState[btn.dataset.prodKey] === btn.dataset.group);
+        });
+      };
+
+      const isKingPosts = overviewActivityMode === 'kingposts' && getKingPostRowsForProject(project).length > 0;
+      if (isKingPosts) {
+        setCardMeta(cardEls.gross, 'Pre-Drilled Output', 'Pre-drilled kingposts by day or CW', 'Nos', ['day', 'cw']);
+        setCardMeta(cardEls.drilling, 'Beam Installation', 'Installed kingposts by day or CW', 'Nos', ['day', 'cw']);
+        setCardMeta(cardEls.cage, 'Drilling Duration', 'Average duration by day or CW', 'hrs', ['day', 'cw']);
+        setCardMeta(cardEls.concrete, 'Over Excavation', 'Average by day, CW, or kingpost', 'm', ['day', 'cw', 'pile']);
+        if (cardEls.gross) cardEls.gross.style.display = '';
+        if (cardEls.drilling) cardEls.drilling.style.display = '';
+        if (cardEls.cage) cardEls.cage.style.display = '';
+        if (cardEls.concrete) cardEls.concrete.style.display = '';
+        if (cardEls.overconsumption) cardEls.overconsumption.style.display = 'none';
+        if (cardEls.overexcavation) cardEls.overexcavation.style.display = 'none';
+        ['gross', 'drilling', 'cage', 'concrete'].forEach(key => renderProductionMetricChart(project, key, forceAnimate));
+      } else {
+        setCardMeta(cardEls.gross, 'Gross Duration', 'Average duration by day or CW', 'hrs', ['day', 'cw']);
+        setCardMeta(cardEls.drilling, 'Drilling Duration', 'Average duration by day or CW', 'hrs', ['day', 'cw']);
+        setCardMeta(cardEls.cage, 'Cage Duration', 'Average duration by day or CW', 'hrs', ['day', 'cw']);
+        setCardMeta(cardEls.concrete, 'Pouring Duration', 'Average duration by day or CW', 'hrs', ['day', 'cw']);
+        setCardMeta(cardEls.overconsumption, 'Over Consumption', 'Average by day, CW, or pile', '%', ['day', 'cw', 'pile']);
+        setCardMeta(cardEls.overexcavation, 'Over Excavation', 'Average by day, CW, or pile', 'm', ['day', 'cw', 'pile']);
+        Object.values(cardEls).forEach(card => {
+          if (card) card.style.display = '';
+        });
+        ['gross', 'drilling', 'cage', 'concrete', 'overconsumption', 'overexcavation']
+          .forEach(key => renderProductionMetricChart(project, key, forceAnimate));
+      }
       productionChartsInitialized = true;
     }
 
     function buildChartDataset(rows, metric, mode) {
+      if (overviewActivityMode === 'kingposts') {
+        const daily = aggregateKingPostMetrics(rows, metric);
+        let cumulative = 0;
+        return daily.map(item => {
+          cumulative += item.value;
+          return {
+            date: item.date,
+            value: mode === 'daily' ? item.value : cumulative,
+            dayValue: item.value,
+            executedCount: item.executedCount,
+            items: item.items,
+            cumulative
+          };
+        });
+      }
       const daily = aggregateDailyMetrics(rows, metric);
       let cumulative = 0;
       return daily.map(item => {
@@ -1919,7 +2426,20 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const wrap = els.chartWrap;
       let html = `<div class="tooltip-title">${periodTitle(dataPoint.date)}</div>`;
       if (chartMode === 'daily') {
-        if (chartMetric === 'piles') {
+        if (overviewActivityMode === 'kingposts') {
+          const label = chartMetric === 'predrilled'
+            ? 'Pre-Drilled'
+            : chartMetric === 'installed'
+              ? 'Beam Installed'
+              : 'Drilled Lm';
+          const unit = metricUnit(chartMetric);
+          html += `<div class="tooltip-row"><span>${label}</span><strong>${Number(dataPoint.value.toFixed(1)).toLocaleString()}${chartMetric === 'lm' ? ` ${unit}` : ''}</strong></div>`;
+          if (chartGranularity === 'day' && dataPoint.items.length) {
+            html += `<div class="tooltip-list">${dataPoint.items.map(item => `<div class="tooltip-list-item"><span>${item.id || '-'}</span><span>${item.status || item.machine || '-'}</span></div>`).join('')}</div>`;
+          } else {
+            html += `<div class="tooltip-row"><span>Elements</span><strong>${dataPoint.executedCount}</strong></div>`;
+          }
+        } else if (chartMetric === 'piles') {
           html += `<div class="tooltip-row"><span>Piles Executed</span><strong>${dataPoint.executedCount}</strong></div>`;
           if (chartGranularity === 'day' && dataPoint.items.length) {
             html += `<div class="tooltip-list">${dataPoint.items.map(item => `<div class="tooltip-list-item"><span>${item.id || '-'}</span><span>${item.machine || '-'}</span></div>`).join('')}</div>`;
@@ -1931,7 +2451,10 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         }
       } else {
         const unit = metricUnit(chartMetric);
-        html += `<div class="tooltip-row"><span>Executed This ${chartGranularity === 'day' ? 'Date' : 'Period'}</span><strong>${Number(dataPoint.dayValue.toFixed(1)).toLocaleString()} ${unit}</strong></div>`;
+        const executedLabel = overviewActivityMode === 'kingposts'
+          ? (chartMetric === 'predrilled' ? 'Pre-Drilled This ' : chartMetric === 'installed' ? 'Installed This ' : 'Drilled This ')
+          : 'Executed This ';
+        html += `<div class="tooltip-row"><span>${executedLabel}${chartGranularity === 'day' ? 'Date' : 'Period'}</span><strong>${Number(dataPoint.dayValue.toFixed(1)).toLocaleString()} ${unit}</strong></div>`;
         html += `<div class="tooltip-row"><span>Cumulative</span><strong>${Number(dataPoint.value.toFixed(1)).toLocaleString()} ${unit}</strong></div>`;
         if (chartMetric === 'piles' && plannedPoint) {
           html += `<div class="tooltip-row"><span>Planned</span><strong>${Number(plannedPoint.value.toFixed(1)).toLocaleString()} piles</strong></div>`;
@@ -2023,6 +2546,96 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       if (activePage === 'production') renderProductionPage(project);
     }
 
+    function renderDashboard(project) {
+      syncOverviewActivityMode(project);
+      syncOverviewMetricButtons();
+
+      const rows = overviewActivityMode === 'kingposts'
+        ? getKingPostRowsForProject(project)
+        : getRowsForProject(project);
+      const avgBasisLabel = '7CD';
+      const totalLabel = els.kpiTotal?.closest('.kpi-card')?.querySelector('.kpi-label');
+      const executedLabel = els.kpiExecuted?.closest('.kpi-card')?.querySelector('.kpi-label');
+      const remainingLabel = els.kpiRemaining?.closest('.kpi-card')?.querySelector('.kpi-label');
+      const rigsLabel = els.kpiRigs?.closest('.kpi-card')?.querySelector('.kpi-label');
+      const avgLabel = els.kpiAvg?.closest('.kpi-card')?.querySelector('.kpi-label');
+      const etaLabel = els.kpiEta?.closest('.kpi-card')?.querySelector('.kpi-label');
+
+      els.pageSubtitle.textContent = getScopeSubtitle();
+
+      if (overviewActivityMode === 'kingposts') {
+        const stats = computeKingPostStats(rows);
+
+        if (totalLabel) totalLabel.textContent = 'Total KingPosts';
+        if (executedLabel) executedLabel.textContent = 'Pre-Drilled';
+        if (remainingLabel) remainingLabel.textContent = 'Beam Installed';
+        if (rigsLabel) rigsLabel.textContent = 'Active Rigs';
+        if (avgLabel) avgLabel.textContent = 'Avg Production (6WD)';
+        if (etaLabel) etaLabel.textContent = 'Est Completion';
+
+        els.kpiTotal.textContent = stats.total.toLocaleString();
+        els.kpiExecuted.textContent = stats.predrilled.toLocaleString();
+        els.kpiRemaining.textContent = stats.completed.toLocaleString();
+        els.kpiRigs.textContent = stats.activeRigs.toLocaleString();
+        els.kpiAvg.textContent = stats.avgPredrilled ? `${stats.avgPredrilled.toLocaleString()} kp/d` : '0 kp/d';
+        if (els.kpiTotalMetaL) els.kpiTotalMetaL.textContent = 'Design Qty';
+        if (els.kpiTotalMetaR) els.kpiTotalMetaR.textContent = 'Live';
+        if (els.kpiCompletedMetaL) els.kpiCompletedMetaL.textContent = `${stats.predrilled.toLocaleString()} ready to install`;
+        if (els.kpiCompletedMetaR) els.kpiCompletedMetaR.textContent = `${stats.yesterdayInstalled} installed yesterday`;
+        if (els.kpiRemainingMetaL) els.kpiRemainingMetaL.textContent = `${stats.progress.toFixed(1)}% complete`;
+        if (els.kpiRemainingMetaR) els.kpiRemainingMetaR.textContent = `${stats.remaining.toLocaleString()} remaining`;
+        if (els.kpiAvgMetaL) els.kpiAvgMetaL.textContent = stats.avgLm ? `${stats.avgLm.toLocaleString()} Lm` : '0 Lm';
+        if (els.kpiAvgMeta) els.kpiAvgMeta.textContent = avgBasisLabel;
+        els.kpiEta.textContent = stats.etaDate ? formatDateLabel(stats.etaDate) : '—';
+        if (els.kpiEtaMeta) els.kpiEtaMeta.textContent = 'Duration';
+        if (els.kpiEtaDays) els.kpiEtaDays.textContent = stats.etaMonths !== null ? `${stats.etaMonths.toFixed(1)} mo` : '—';
+
+        if (els.overviewMatrixTitle) els.overviewMatrixTitle.textContent = 'KingPost Activity Matrix';
+        if (els.overviewMatrixTag) els.overviewMatrixTag.textContent = 'Live';
+        if (els.overviewMatrixHead1) els.overviewMatrixHead1.textContent = 'Date';
+        if (els.overviewMatrixHead2) els.overviewMatrixHead2.textContent = 'ID';
+        if (els.overviewMatrixHead3) els.overviewMatrixHead3.textContent = 'Depth';
+        if (els.overviewMatrixHead4) els.overviewMatrixHead4.textContent = 'Status';
+      } else {
+        const stats = computeStats(rows, project);
+
+        if (totalLabel) totalLabel.textContent = 'Total Piles';
+        if (executedLabel) executedLabel.textContent = 'Piles Completed';
+        if (remainingLabel) remainingLabel.textContent = 'Piles Remaining';
+        if (rigsLabel) rigsLabel.textContent = 'Active Rigs';
+        if (avgLabel) avgLabel.textContent = 'Avg Production (6WD)';
+        if (etaLabel) etaLabel.textContent = 'Est Completion';
+
+        els.kpiTotal.textContent = stats.total.toLocaleString();
+        els.kpiExecuted.textContent = stats.completed.toLocaleString();
+        els.kpiRemaining.textContent = stats.remaining.toLocaleString();
+        els.kpiRigs.textContent = stats.activeRigs.toLocaleString();
+        els.kpiAvg.textContent = stats.avgPiles ? `${stats.avgPiles.toLocaleString()} pile/d` : '0 pile/d';
+        if (els.kpiTotalMetaL) els.kpiTotalMetaL.textContent = 'Design Qty';
+        if (els.kpiTotalMetaR) els.kpiTotalMetaR.textContent = 'Live';
+        if (els.kpiCompletedMetaL) els.kpiCompletedMetaL.textContent = `${stats.progress.toFixed(1)}% executed`;
+        if (els.kpiCompletedMetaR) els.kpiCompletedMetaR.textContent = `${stats.yesterdayExecuted} yesterday`;
+        if (els.kpiRemainingMetaL) els.kpiRemainingMetaL.textContent = 'Remaining to execute';
+        if (els.kpiRemainingMetaR) els.kpiRemainingMetaR.textContent = `${(100 - stats.progress).toFixed(1)}%`;
+        if (els.kpiAvgMetaL) els.kpiAvgMetaL.textContent = stats.avgLm ? `${stats.avgLm.toLocaleString()} Lm` : '0 Lm';
+        if (els.kpiAvgMeta) els.kpiAvgMeta.textContent = avgBasisLabel;
+        els.kpiEta.textContent = stats.etaDate ? formatDateLabel(stats.etaDate) : '—';
+        if (els.kpiEtaMeta) els.kpiEtaMeta.textContent = 'Duration';
+        if (els.kpiEtaDays) els.kpiEtaDays.textContent = stats.etaMonths !== null ? `${stats.etaMonths.toFixed(1)} mo` : '—';
+
+        if (els.overviewMatrixTitle) els.overviewMatrixTitle.textContent = 'Executed Piles Matrix';
+        if (els.overviewMatrixTag) els.overviewMatrixTag.textContent = 'CW';
+        if (els.overviewMatrixHead1) els.overviewMatrixHead1.textContent = 'CW / Date';
+        if (els.overviewMatrixHead2) els.overviewMatrixHead2.textContent = 'ID';
+        if (els.overviewMatrixHead3) els.overviewMatrixHead3.textContent = 'Lm';
+        if (els.overviewMatrixHead4) els.overviewMatrixHead4.textContent = 'm3';
+      }
+
+      renderChart(rows, project);
+      renderExecutionMatrix(rows);
+      if (activePage === 'production') renderProductionPage(project);
+    }
+
     async function loadDashboardData() {
       els.dataSourceChip.textContent = 'Loading Source';
       const res = await fetch(JSON_URL, { cache: 'no-store' });
@@ -2031,8 +2644,21 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
       const sourceRows = Array.isArray(data) ? data : (Array.isArray(data.piles) ? data.piles : []);
       rawRows = sourceRows;
-      if (!rawRows.length) throw new Error('No rows found in project source');
       if (!currentUser) throw new Error('Sign in required');
+
+      try {
+        const kingPostRes = await fetch(KINGPOST_URL, { cache: 'no-store' });
+        if (!kingPostRes.ok) throw new Error(`HTTP ${kingPostRes.status}`);
+        const kingPostData = await kingPostRes.json();
+        kingPostRows = extractKingPostList(kingPostData);
+      } catch (err) {
+        console.error('Unable to load kingpost source:', err);
+        kingPostRows = [];
+      }
+
+      if (!rawRows.length && !kingPostRows.length) {
+        throw new Error('No rows found in project sources');
+      }
 
       try {
         const manpowerRes = await fetch(MANPOWER_URL, { cache: 'no-store' });
@@ -2211,7 +2837,79 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       return candidates.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
     }
 
+    function buildKingPostTimelineRows(rows) {
+      const candidates = rows.map(row => {
+        const drillStart = getRowDate(row, ['drillingStart', 'asbuilt_DrillingStart', 'asbuilt_drillingStart']);
+        const drillEnd = getRowDate(row, ['drillingEnd', 'asbuilt_DrillingEnd', 'asbuilt_drillingEnd']);
+        const beamDate = getRowDate(row, ['beamInstallation', 'BeamInstallation']);
+        const id = normalizeText(row.id || row.PileID || row.name);
+        if (!id) return null;
+        const rig = normalizeText(row.rig1 || row.asbuilt_Rig1);
+        const rigDepthRaw = Number(row.rig1Depth ?? row.asbuilt_Rig1Depth);
+        const rigDepth = Number.isFinite(rigDepthRaw) && rigDepthRaw > 0 ? rigDepthRaw : null;
+        const drillDuration = Number(row.drillingDuration ?? row.asbuilt_DurationDrilling) || hoursBetween(drillStart, drillEnd) || 0;
+        const beamDuration = beamDate ? 1 : 0;
+
+        const activities = [];
+        if (drillStart && drillEnd && drillEnd >= drillStart) {
+          activities.push({
+            key: 'drilling',
+            label: 'Drilling',
+            color: '#4ade80',
+            start: drillStart,
+            end: drillEnd,
+            duration: drillDuration,
+            machine: rig,
+            machineDepth: rigDepth
+          });
+        }
+        if (beamDate) {
+          const beamEnd = new Date(beamDate.getTime() + beamDuration * 36e5);
+          activities.push({
+            key: 'beam',
+            label: 'Beam Installation',
+            color: '#4b92c6',
+            start: beamDate,
+            end: beamEnd,
+            duration: beamDuration
+          });
+        }
+        if (!activities.length) return null;
+
+        const lengthRaw = Number(row.asbuiltDepth ?? row.asbuilt_depth ?? row.designDepthDrilling ?? row.design_DepthDrilling);
+        const gross = drillStart && beamDate
+          ? Math.max(beamDuration, hoursBetween(drillStart, new Date(beamDate.getTime() + beamDuration * 36e5)) || 0)
+          : (drillDuration || beamDuration);
+
+        return {
+          id,
+          row,
+          length: Number.isFinite(lengthRaw) ? lengthRaw : 0,
+          status: beamDate ? 'Installed' : (isKingPostPreDrilled(row) ? 'Pre-Drilled' : 'Pending'),
+          activities,
+          drillStart,
+          drillEnd,
+          beamStart: beamDate,
+          beamEnd: beamDate ? new Date(beamDate.getTime() + beamDuration * 36e5) : null,
+          drilling: drillDuration,
+          beam: beamDuration,
+          cage: null,
+          pouring: null,
+          gap1: null,
+          gap2: null,
+          gross,
+          minStart: new Date(Math.min(...activities.map(a => a.start.getTime()))),
+          maxEnd: new Date(Math.max(...activities.map(a => a.end.getTime())))
+        };
+      }).filter(Boolean);
+
+      return candidates.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+    }
+
     function timelineRowsForProject(project) {
+      if (overviewActivityMode === 'kingposts' && hasKingPostActivity(project)) {
+        return buildKingPostTimelineRows(getKingPostRowsForProject(project));
+      }
       return buildPileTimelineRows(getRowsForProject(project));
     }
 
@@ -2281,8 +2979,24 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
     function renderTimelineTable(rows) {
       if (!els.timelineTableBody) return;
+      const isKingPosts = overviewActivityMode === 'kingposts';
       if (!rows.length) {
         els.timelineTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:rgba(244,247,251,0.62);">No data</td></tr>`;
+        return;
+      }
+      if (isKingPosts) {
+        els.timelineTableBody.innerHTML = rows.map(item => `
+          <tr>
+            <td>${item.id}</td>
+            <td>${formatNumberOneDecimal(item.length)}</td>
+            <td>${formatNumberOneDecimal(item.drilling)} hr</td>
+            <td>${item.beam ? `${formatNumberOneDecimal(item.beam)} hr` : '-'}</td>
+            <td>${item.status || '-'}</td>
+            <td>-</td>
+            <td>-</td>
+            <td>${formatNumberOneDecimal(item.gross)} hr</td>
+          </tr>
+        `).join('');
         return;
       }
       els.timelineTableBody.innerHTML = rows.map(item => `
@@ -2301,6 +3015,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
     function renderTimelineSummary(rows, forceAnimate = false) {
       const count = rows.length;
+      const isKingPosts = overviewActivityMode === 'kingposts';
       const avg = key => {
         const vals = rows.map(r => r[key]).filter(v => Number.isFinite(v) && v >= 0);
         return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
@@ -2311,23 +3026,46 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         : 'Total / All Dates';
 
       els.timelineSummarySubtitle.textContent = `Current scope: ${label}`;
-      els.timelinePieSubtitle.textContent = `Average activities and gaps for ${timelineState.pile === 'all' ? 'all filtered piles' : timelineState.pile}`;
-      els.timelinePileTag.textContent = timelineState.pile === 'all' ? 'All Piles' : timelineState.pile;
-      els.timelineTag.textContent = timelineState.pile === 'all' ? `${count} piles` : timelineState.pile;
+      els.timelinePieSubtitle.textContent = isKingPosts
+        ? `Average drilling and beam installation for ${timelineState.pile === 'all' ? 'all filtered kingposts' : timelineState.pile}`
+        : `Average activities and gaps for ${timelineState.pile === 'all' ? 'all filtered piles' : timelineState.pile}`;
+      els.timelinePileTag.textContent = timelineState.pile === 'all' ? (isKingPosts ? 'All KingPosts' : 'All Piles') : timelineState.pile;
+      els.timelineTag.textContent = timelineState.pile === 'all' ? `${count} ${isKingPosts ? 'kingposts' : 'piles'}` : timelineState.pile;
       if (els.timelineScopeCount) {
-        els.timelineScopeCount.textContent = `${count} pile${count === 1 ? '' : 's'}`;
+        els.timelineScopeCount.textContent = `${count} ${isKingPosts ? `kingpost${count === 1 ? '' : 's'}` : `pile${count === 1 ? '' : 's'}`}`;
       }
+
+      if (els.timelineHeadDrilling) els.timelineHeadDrilling.textContent = 'Drilling';
+      if (els.timelineHeadCage) els.timelineHeadCage.textContent = isKingPosts ? 'Beam Inst.' : 'Cage';
+      if (els.timelineHeadPouring) els.timelineHeadPouring.textContent = isKingPosts ? 'Status' : 'Pouring';
+      if (els.timelineHeadGap1) els.timelineHeadGap1.textContent = isKingPosts ? '-' : 'Gap 1';
+      if (els.timelineHeadGap2) els.timelineHeadGap2.textContent = isKingPosts ? '-' : 'Gap 2';
+      if (els.timelineHeadGross) els.timelineHeadGross.textContent = 'Gross';
+
+      if (els.timelineLegendDrilling) els.timelineLegendDrilling.style.display = '';
+      if (els.timelineLegendGap1) els.timelineLegendGap1.style.display = isKingPosts ? 'none' : '';
+      if (els.timelineLegendCage) {
+        els.timelineLegendCage.style.display = '';
+        els.timelineLegendCage.innerHTML = `<span class="timeline-legend-swatch" style="background:${isKingPosts ? '#4b92c6' : '#c4e45f'};"></span>${isKingPosts ? 'Beam Installation' : 'Cage'}`;
+      }
+      if (els.timelineLegendGap2) els.timelineLegendGap2.style.display = isKingPosts ? 'none' : '';
+      if (els.timelineLegendPouring) els.timelineLegendPouring.style.display = isKingPosts ? 'none' : '';
 
       renderTimelineTable(rows);
 
       const gapColor = '#f1a9a9';
-      const items = [
-        { label: 'Drilling', value: avg('drilling'), color: '#4ade80' },
-        { label: 'Gap 1', value: avg('gap1'), color: gapColor },
-        { label: 'Cage', value: avg('cage'), color: '#c4e45f' },
-        { label: 'Gap 2', value: avg('gap2'), color: gapColor },
-        { label: 'Pouring', value: avg('pouring'), color: '#4b92c6' }
-      ].filter(item => Number.isFinite(item.value) && item.value > 0);
+      const items = isKingPosts
+        ? [
+            { label: 'Drilling', value: avg('drilling'), color: '#4ade80' },
+            { label: 'Beam Installation', value: avg('beam'), color: '#4b92c6' }
+          ].filter(item => Number.isFinite(item.value) && item.value > 0)
+        : [
+            { label: 'Drilling', value: avg('drilling'), color: '#4ade80' },
+            { label: 'Gap 1', value: avg('gap1'), color: gapColor },
+            { label: 'Cage', value: avg('cage'), color: '#c4e45f' },
+            { label: 'Gap 2', value: avg('gap2'), color: gapColor },
+            { label: 'Pouring', value: avg('pouring'), color: '#4b92c6' }
+          ].filter(item => Number.isFinite(item.value) && item.value > 0);
 
       renderTimelinePie(items, forceAnimate);
     }
@@ -2456,6 +3194,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       if (!els.pageTimeline) return;
       updateTimelinePileList(project);
       const rows = getTimelineFilteredRows(project);
+      const isKingPosts = overviewActivityMode === 'kingposts' && hasKingPostActivity(project);
       renderTimelineSummary(rows, forceAnimate);
 
       const wrap = els.timelineChartWrap;
@@ -2465,13 +3204,15 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
       if (!rows.length) {
         els.timelineEmpty.style.display = 'grid';
-        els.timelineSubtitle.textContent = 'No pile activities found for the current filter';
+        els.timelineSubtitle.textContent = isKingPosts
+          ? 'No kingpost activities found for the current filter'
+          : 'No pile activities found for the current filter';
         return;
       }
 
       els.timelineEmpty.style.display = 'none';
       els.timelineSubtitle.textContent = timelineState.pile === 'all'
-        ? 'Pile activities timeline filtered by selected period and pile'
+        ? (isKingPosts ? 'Kingpost activities timeline filtered by selected period and element' : 'Pile activities timeline filtered by selected period and pile')
         : `${timelineState.pile} activity timeline`;
 
       const minStart = new Date(Math.min(...rows.flatMap(r => r.activities.map(a => a.start.getTime()))));
@@ -2496,11 +3237,16 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       const drillingRowCount = Math.max(1, drillingMachines.length);
       const drillingMachineIndex = new Map(drillingMachines.map((machine, index) => [machine, index]));
       const baseLaneHeight = 56;
-      const lanes = [
-        { key: 'drilling', label: 'Drilling', color: '#4ade80', height: drillingRowCount > 1 ? Math.max(72, 26 * drillingRowCount + 16) : baseLaneHeight },
-        { key: 'cage', label: 'Cage Installation', color: '#c4e45f', height: baseLaneHeight },
-        { key: 'pouring', label: 'Pouring', color: '#4b92c6', height: baseLaneHeight }
-      ];
+      const lanes = isKingPosts
+        ? [
+            { key: 'drilling', label: 'Drilling', color: '#4ade80', height: drillingRowCount > 1 ? Math.max(72, 26 * drillingRowCount + 16) : baseLaneHeight },
+            { key: 'beam', label: 'Beam Installation', color: '#4b92c6', height: baseLaneHeight }
+          ]
+        : [
+            { key: 'drilling', label: 'Drilling', color: '#4ade80', height: drillingRowCount > 1 ? Math.max(72, 26 * drillingRowCount + 16) : baseLaneHeight },
+            { key: 'cage', label: 'Cage Installation', color: '#c4e45f', height: baseLaneHeight },
+            { key: 'pouring', label: 'Pouring', color: '#4b92c6', height: baseLaneHeight }
+          ];
       const laneTops = [];
       lanes.reduce((cursor, lane, idx) => {
         laneTops[idx] = cursor;
@@ -2583,7 +3329,9 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         }
       }
 
-      const laneIndex = { drilling: 0, cage: 1, pouring: 2 };
+      const laneIndex = isKingPosts
+        ? { drilling: 0, beam: 1 }
+        : { drilling: 0, cage: 1, pouring: 2 };
       const animatedTimelineElements = [];
       rows.forEach(pile => {
         pile.activities.forEach(activity => {
@@ -6410,12 +7158,14 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
           await loadDashboardData();
         }
 
-          if (els.projectSelector) {
-            els.projectSelector.addEventListener('change', e => {
+        if (els.projectSelector) {
+          els.projectSelector.addEventListener('change', e => {
             if (!canSelectProjects()) return;
-              selectedProject = e.target.value;
-              timelineState.pile = 'all';
-              persistScopedSession();
+            selectedProject = e.target.value;
+            selectedPlot = '';
+            timelineState.pile = 'all';
+            syncOverviewActivityMode(selectedProject);
+            persistScopedSession();
             updateTimelinePileList(selectedProject);
             syncTimelinePresetButtons();
             renderDashboard(selectedProject);
@@ -6428,6 +7178,15 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
             if (activePage === 'cost') renderCostPage(selectedProject, true);
             broadcastAuthContext();
           });
+        }
+
+        if (els.overviewActivityButtons?.length) {
+          els.overviewActivityButtons.forEach(btn => btn.addEventListener('click', () => {
+            overviewActivityMode = btn.dataset.activity || 'piles';
+            syncOverviewActivityMode(selectedProject);
+            syncOverviewMetricButtons();
+            renderDashboard(selectedProject);
+          }));
         }
 
         if (els.refreshDashboardBtn) {

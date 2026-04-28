@@ -505,8 +505,12 @@
     })();
 
     mapboxgl.accessToken = 'pk.eyJ1IjoieWFzc2VyYWxzZWJhZWUiLCJhIjoiY20zbHdwam12MG9wdzJwczc2aGl0eTRwZCJ9.xZgmTXWHWe73-Ad1jhkmbQ';
-    const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-pile-asbuilt.json_';
-    const KINGPOST_JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-kingpost-asbuilt.json_';
+    const DATA_WORKER_URL = 'https://apfc-data.yasser-alsebaee.workers.dev/';
+    const DATA_WORKER_API_KEY = 'apfc_F7k9LmQ2xR8vT5ZpA1sD6wN3YtE4uH0JcB9KqX';
+    const DATA_FILE_KEYS = {
+      piles: 'piles',
+      kingpost: 'kingpost'
+    };
     const BASE_STYLE_URL = 'mapbox://styles/yasseralsebaee/cmmfw9dvc00b001ra2h2f5vrw';
     const SAT_STYLE_OBJECT = {
       version: 8,
@@ -667,8 +671,15 @@
       return String(value || '').trim();
     }
 
+    function normalizeScopeText(value) {
+      return normalizeText(value)
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+    }
+
     function isAllPlotsValue(value) {
-      const normalized = normalizeText(value).toLowerCase();
+      const normalized = normalizeScopeText(value);
       return !normalized || normalized === '-' || normalized === '—' || normalized === 'all' || normalized === 'all plots' || normalized === 'all plot';
     }
 
@@ -689,15 +700,22 @@
       const selectedProject = normalizeText(stored.selectedProject);
       const userProject = normalizeText(stored.project);
       const effectiveProject = selectedProject || (userProject.toLowerCase() === 'all' ? DEFAULT_PROJECT : userProject) || DEFAULT_PROJECT;
+      const plotValue = Object.prototype.hasOwnProperty.call(stored, 'selectedPlot')
+        ? stored.selectedPlot
+        : stored.plot;
       return {
         project: effectiveProject,
-        plot: normalizeText(stored.selectedPlot || stored.plot)
+        plot: normalizeText(plotValue)
       };
     }
 
     function matchesScope(row, scope) {
-      const projectMatch = normalizeText(row.project) === normalizeText(scope.project);
-      const plotMatch = isAllPlotsValue(scope.plot) || normalizeText(row.plot) === normalizeText(scope.plot);
+      const rowProject = normalizeScopeText(row?.project || row?.Project);
+      const scopeProject = normalizeScopeText(scope?.project);
+      const rowPlot = normalizeScopeText(row?.plot || row?.Plot);
+      const scopePlot = normalizeScopeText(scope?.plot);
+      const projectMatch = rowProject === scopeProject;
+      const plotMatch = isAllPlotsValue(scope.plot) || rowPlot === scopePlot;
       return projectMatch && plotMatch;
     }
 
@@ -711,6 +729,13 @@
       if (!scope) return allKingPosts;
       const scoped = allKingPosts.filter(row => matchesScope(row, scope));
       return scoped.length ? scoped : allKingPosts;
+    }
+
+    function hasScopedElements(scope) {
+      if (!scope) return (allPiles.length + allKingPosts.length) > 0;
+      const scopedPiles = allPiles.filter(row => matchesScope(row, scope));
+      const scopedKingPosts = allKingPosts.filter(row => matchesScope(row, scope));
+      return scopedPiles.length > 0 || scopedKingPosts.length > 0;
     }
 
     function getFocusedWidgetPiles() {
@@ -750,37 +775,37 @@
       return {
         contractor1: row?.asbuilt_Contractor1 ?? row?.contractor1 ?? null,
         asbuilt_depth: row?.asbuilt_depth ?? null,
-        asbuilt_depthdrillingfromplatform: row?.asbuilt_DepthDrillingFromPlatform ?? null,
+        asbuilt_depthdrillingfromplatform: row?.asbuilt_DepthDrillingFromPlatform ?? row?.asbuilt_depthdrillingfromplatform ?? null,
         asbuilt_drillingEnd: row?.asbuilt_DrillingEnd ?? row?.asbuilt_drillingEnd ?? null,
         asbuilt_drillingStart: row?.asbuilt_DrillingStart ?? row?.asbuilt_drillingStart ?? null,
         asbuilt_durationdrilling: row?.asbuilt_DurationDrilling ?? row?.asbuilt_durationdrilling ?? null,
-        asbuilt_levelplatform: row?.asbuilt_LevelPlatform ?? null,
-        asbuilt_leveltoe: row?.asbuilt_LevelToe ?? null,
+        asbuilt_levelplatform: row?.asbuilt_LevelPlatform ?? row?.asbuilt_levelplatform ?? null,
+        asbuilt_leveltoe: row?.asbuilt_LevelToe ?? row?.asbuilt_leveltoe ?? null,
         asbuilt_overexcavation: row?.asbuilt_overexcavation ?? row?.asbuilt_Overexcavation ?? null,
-        asbuilt_rig1: row?.asbuilt_Rig1 ?? null,
-        asbuilt_rig1depth: row?.asbuilt_Rig1Depth ?? null,
-        asbuilt_textfield: row?.asbuilt_TextField ?? null,
-        asbuilt_wir: row?.asbuilt_WIR ?? null,
-        asbuilt_x: row?.asbuilt_X ?? null,
-        asbuilt_y: row?.asbuilt_Y ?? null,
-        beamInstallation: row?.BeamInstallation ?? null,
-        building: row?.Building ?? null,
-        design_depthdrilling: row?.design_DepthDrilling ?? null,
-        design_levelplatform: row?.design_LevelPlatform ?? null,
-        design_leveltoe: row?.design_LevelToe ?? null,
-        design_leveltopofshoring: row?.design_LevelTopOfShoring ?? null,
-        design_x: row?.design_X ?? null,
-        design_y: row?.design_Y ?? null,
-        design_back_x: row?.design_back_X ?? row?.design_Back_X ?? null,
-        design_back_y: row?.design_back_Y ?? row?.design_Back_Y ?? null,
-        elementType: row?.ElementType ?? 'KingPost',
-        isInstalled: row?.IsInstalled ?? null,
-        operationalStatus: row?.OperationalStatus ?? null,
-        pileId: row?.PileID ?? null,
-        plot: row?.Plot ?? null,
-        profile: row?.Profile ?? null,
-        project: row?.Project ?? null,
-        section: row?.Section ?? null
+        asbuilt_rig1: row?.asbuilt_Rig1 ?? row?.asbuilt_rig1 ?? null,
+        asbuilt_rig1depth: row?.asbuilt_Rig1Depth ?? row?.asbuilt_rig1depth ?? null,
+        asbuilt_textfield: row?.asbuilt_TextField ?? row?.asbuilt_textfield ?? null,
+        asbuilt_wir: row?.asbuilt_WIR ?? row?.asbuilt_wir ?? null,
+        asbuilt_x: row?.asbuilt_X ?? row?.asbuilt_x ?? null,
+        asbuilt_y: row?.asbuilt_Y ?? row?.asbuilt_y ?? null,
+        beamInstallation: row?.BeamInstallation ?? row?.beamInstallation ?? row?.beaminstallation ?? null,
+        building: row?.Building ?? row?.building ?? null,
+        design_depthdrilling: row?.design_DepthDrilling ?? row?.design_depthdrilling ?? null,
+        design_levelplatform: row?.design_LevelPlatform ?? row?.design_levelplatform ?? null,
+        design_leveltoe: row?.design_LevelToe ?? row?.design_leveltoe ?? null,
+        design_leveltopofshoring: row?.design_LevelTopOfShoring ?? row?.design_leveltopofshoring ?? null,
+        design_x: row?.design_X ?? row?.design_x ?? null,
+        design_y: row?.design_Y ?? row?.design_y ?? null,
+        design_back_x: row?.design_back_X ?? row?.design_Back_X ?? row?.design_back_x ?? null,
+        design_back_y: row?.design_back_Y ?? row?.design_Back_Y ?? row?.design_back_y ?? null,
+        elementType: row?.ElementType ?? row?.elementType ?? 'KingPost',
+        isInstalled: row?.IsInstalled ?? row?.isInstalled ?? row?.isinstalled ?? null,
+        operationalStatus: row?.OperationalStatus ?? row?.operationalStatus ?? row?.operationalstatus ?? null,
+        pileId: row?.PileID ?? row?.pileId ?? row?.pileid ?? null,
+        plot: row?.Plot ?? row?.plot ?? null,
+        profile: row?.Profile ?? row?.profile ?? null,
+        project: row?.Project ?? row?.project ?? null,
+        section: row?.Section ?? row?.section ?? null
       };
     }
 
@@ -827,6 +852,63 @@
       return String(value ?? '')
         .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+    }
+
+    async function fetchWorkerJson(fileKey) {
+      const url = new URL(DATA_WORKER_URL);
+      url.searchParams.set('file', fileKey);
+      const res = await fetch(url.toString(), {
+        cache: 'no-store',
+        headers: {
+          'x-api-key': DATA_WORKER_API_KEY
+        }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    function extractPileList(data) {
+      const payload = data?.body ?? data;
+      if (Array.isArray(payload)) {
+        if (payload.every(item => item && typeof item === 'object' && Array.isArray(item.piles))) {
+          return payload.flatMap(item => {
+            const project = normalizeText(item.project || item.Project);
+            const plot = normalizeText(item.plot || item.Plot);
+            return item.piles.map(pile => ({
+              ...pile,
+              project: normalizeText(pile.project || pile.Project || project),
+              plot: normalizeText(pile.plot || pile.Plot || plot)
+            }));
+          });
+        }
+        return payload.map(row => ({
+          ...row,
+          project: normalizeText(row?.project || row?.Project),
+          plot: normalizeText(row?.plot || row?.Plot)
+        }));
+      }
+      if (payload && typeof payload === 'object' && Array.isArray(payload.piles)) {
+        const project = normalizeText(payload.project || payload.Project);
+        const plot = normalizeText(payload.plot || payload.Plot);
+        return payload.piles.map(pile => ({
+          ...pile,
+          project: normalizeText(pile.project || pile.Project || project),
+          plot: normalizeText(pile.plot || pile.Plot || plot)
+        }));
+      }
+      return [];
+    }
+
+    function extractKingPostSourceRows(data) {
+      const payload = data?.body ?? data;
+      if (Array.isArray(payload)) return payload;
+      if (payload && typeof payload === 'object') {
+        if (Array.isArray(payload.rows)) return payload.rows;
+        if (Array.isArray(payload.kingposts)) return payload.kingposts;
+        if (Array.isArray(payload.kingPosts)) return payload.kingPosts;
+        if (Array.isArray(payload.items)) return payload.items;
+      }
+      return [];
     }
 
     function isExecutedRow(row) { return !!row.isExecuted; }
@@ -1215,6 +1297,43 @@
       );
     }
 
+    function getFocusRecords(records) {
+      const valid = (Array.isArray(records) ? records : []).filter(rec => {
+        const lng = Number(rec?.lngLat?.[0]);
+        const lat = Number(rec?.lngLat?.[1]);
+        return Number.isFinite(lng) && Number.isFinite(lat);
+      });
+      if (valid.length < 4) return valid;
+
+      const sortedLng = valid.map(rec => Number(rec.lngLat[0])).sort((a, b) => a - b);
+      const sortedLat = valid.map(rec => Number(rec.lngLat[1])).sort((a, b) => a - b);
+      const mid = Math.floor(valid.length / 2);
+      const medianLng = valid.length % 2 ? sortedLng[mid] : (sortedLng[mid - 1] + sortedLng[mid]) / 2;
+      const medianLat = valid.length % 2 ? sortedLat[mid] : (sortedLat[mid - 1] + sortedLat[mid]) / 2;
+
+      const distances = valid.map(rec => {
+        const lng = Number(rec.lngLat[0]);
+        const lat = Number(rec.lngLat[1]);
+        const dx = lng - medianLng;
+        const dy = lat - medianLat;
+        return Math.sqrt(dx * dx + dy * dy);
+      }).sort((a, b) => a - b);
+
+      const medianDistance = valid.length % 2
+        ? distances[mid]
+        : (distances[mid - 1] + distances[mid]) / 2;
+      const distanceThreshold = Math.max(medianDistance * 6, 0.0008);
+      const clustered = valid.filter(rec => {
+        const lng = Number(rec.lngLat[0]);
+        const lat = Number(rec.lngLat[1]);
+        const dx = lng - medianLng;
+        const dy = lat - medianLat;
+        return Math.sqrt(dx * dx + dy * dy) <= distanceThreshold;
+      });
+
+      return clustered.length >= Math.max(3, Math.ceil(valid.length * 0.5)) ? clustered : valid;
+    }
+
     function getPileCentroid(records) {
       return getRecordCentroid(records);
     }
@@ -1498,8 +1617,9 @@
       view3DBtn.classList.toggle('active', is3D);
       const scope = getActiveScope();
       const focusedRecords = getFocusedElementRecords(scope);
-      const projectBounds = getRecordBounds(focusedRecords);
-      const focusedCenter = getRecordCentroid(focusedRecords);
+      const focusRecords = getFocusRecords(focusedRecords);
+      const projectBounds = getRecordBounds(focusRecords);
+      const focusedCenter = getRecordCentroid(focusRecords);
       const duration = options.instant ? 0 : (options.quick ? MAP_PREMIUM.camera.quickDuration : MAP_PREMIUM.camera.duration);
       const easing = MAP_PREMIUM.camera.easing;
 
@@ -2632,14 +2752,12 @@
       const scope = getActiveScope();
       if (!scope) return false;
 
-      const [pileRes, kingPostRows] = await Promise.all([
-        fetch(JSON_URL, { cache: 'no-store' }),
+      const [pileData, kingPostRows] = await Promise.all([
+        fetchWorkerJson(DATA_FILE_KEYS.piles),
         (async () => {
           try {
-            const res = await fetch(KINGPOST_JSON_URL, { cache: 'no-store' });
-            if (!res.ok) return [];
-            const data = await res.json();
-            const rows = Array.isArray(data) ? data : (data.body || []);
+            const data = await fetchWorkerJson(DATA_FILE_KEYS.kingpost);
+            const rows = extractKingPostSourceRows(data);
             return rows.map(sanitizeKingPostRow);
           } catch (err) {
             console.warn('KingPost source load skipped:', err);
@@ -2647,9 +2765,7 @@
           }
         })()
       ]);
-      if (!pileRes.ok) throw new Error(`HTTP ${pileRes.status}`);
-      const data = await pileRes.json();
-      const rawPiles = Array.isArray(data) ? data : (data.piles || []);
+      const rawPiles = extractPileList(pileData);
       allPiles = rawPiles;
       allKingPosts = kingPostRows;
       pileRecords = buildPileRecords(allPiles);
@@ -2791,7 +2907,8 @@
             } catch (err) {}
           }
           try {
-            if (!allPiles.length) {
+            const scope = getActiveScope();
+            if ((!allPiles.length && !allKingPosts.length) || !hasScopedElements(scope)) {
               loadMapDataForCurrentScope().catch(err => {
                 console.error(err);
                 panelTitle.textContent = 'Load error';

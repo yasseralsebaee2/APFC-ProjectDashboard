@@ -1,10 +1,14 @@
-    const JSON_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-pile-asbuilt.json_';
-    const KINGPOST_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-kingpost-asbuilt.json_';
-    const USERS_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc-users.json_';
-    const MANPOWER_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc_manpower.json_';
-    const COMPANY_MANPOWER_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_apfc_manpowers.json_';
-    const EQUIPMENT_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_APFC-Equipment.json_';
-    const DAILY_REPORT_EQUIPMENT_URL = 'https://raw.githubusercontent.com/yasseralsebaee2/APFC-Data/refs/heads/main/_APFC-DilyReport-Rigs.json_';
+    const DATA_WORKER_URL = 'https://apfc-data.yasser-alsebaee.workers.dev/';
+    const DATA_WORKER_API_KEY = 'apfc_F7k9LmQ2xR8vT5ZpA1sD6wN3YtE4uH0JcB9KqX';
+    const DATA_FILE_KEYS = {
+      piles: 'piles',
+      kingpost: 'kingpost',
+      users: 'users',
+      manpower: 'manpower',
+      manpowers: 'manpowers',
+      equipment: 'equipment',
+      dailyrigs: 'dailyrigs'
+    };
     const ACCESS_REQUEST_EMAIL = 'yasser.alsebaee@granadaeurope.com';
     const DEFAULT_PROJECT = 'Titania';
     const AUTH_STORAGE_KEY = 'apfcDashboardAuth';
@@ -236,6 +240,51 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    async function fetchWorkerJson(fileKey) {
+      const url = new URL(DATA_WORKER_URL);
+      url.searchParams.set('file', fileKey);
+      const res = await fetch(url.toString(), {
+        cache: 'no-store',
+        headers: {
+          'x-api-key': DATA_WORKER_API_KEY
+        }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    function extractPileList(data) {
+      const payload = data?.body ?? data;
+      if (Array.isArray(payload)) {
+        if (payload.every(item => item && typeof item === 'object' && Array.isArray(item.piles))) {
+          return payload.flatMap(item => {
+            const project = normalizeText(item.project || item.Project);
+            const plot = normalizeText(item.plot || item.Plot);
+            return item.piles.map(pile => ({
+              ...pile,
+              project: normalizeText(pile.project || pile.Project || project),
+              plot: normalizeText(pile.plot || pile.Plot || plot)
+            }));
+          });
+        }
+        return payload.map(row => ({
+          ...row,
+          project: normalizeText(row?.project || row?.Project),
+          plot: normalizeText(row?.plot || row?.Plot)
+        }));
+      }
+      if (payload && typeof payload === 'object' && Array.isArray(payload.piles)) {
+        const project = normalizeText(payload.project || payload.Project);
+        const plot = normalizeText(payload.plot || payload.Plot);
+        return payload.piles.map(pile => ({
+          ...pile,
+          project: normalizeText(pile.project || pile.Project || project),
+          plot: normalizeText(pile.plot || pile.Plot || plot)
+        }));
+      }
+      return [];
     }
 
     function isAllPlotsValue(value) {
@@ -589,9 +638,7 @@
     }
 
     async function loadUsersDirectory() {
-      const res = await fetch(USERS_URL, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`Users source HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await fetchWorkerJson(DATA_FILE_KEYS.users);
       const list = extractUserList(data);
       usersDirectory = list.map(sanitizeUserRecord).filter(user => user.username && user.password && user.project);
       if (!usersDirectory.length) throw new Error('No users found in the APFC users source');
@@ -838,7 +885,7 @@
     }
 
     function getCombinedProjectList() {
-      const pileProjects = rawRows.map(r => normalizeText(r.project));
+      const pileProjects = rawRows.map(r => normalizeText(r.project || r.Project));
       const kingPostProjects = kingPostRows.map(r => normalizeText(r.project));
       const projects = Array.from(new Set([...pileProjects, ...kingPostProjects].filter(Boolean))).sort((a, b) => a.localeCompare(b));
       if (projects.includes(DEFAULT_PROJECT)) {
@@ -2638,18 +2685,13 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
     async function loadDashboardData() {
       els.dataSourceChip.textContent = 'Loading Source';
-      const res = await fetch(JSON_URL, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      const sourceRows = Array.isArray(data) ? data : (Array.isArray(data.piles) ? data.piles : []);
+      const data = await fetchWorkerJson(DATA_FILE_KEYS.piles);
+      const sourceRows = extractPileList(data);
       rawRows = sourceRows;
       if (!currentUser) throw new Error('Sign in required');
 
       try {
-        const kingPostRes = await fetch(KINGPOST_URL, { cache: 'no-store' });
-        if (!kingPostRes.ok) throw new Error(`HTTP ${kingPostRes.status}`);
-        const kingPostData = await kingPostRes.json();
+        const kingPostData = await fetchWorkerJson(DATA_FILE_KEYS.kingpost);
         kingPostRows = extractKingPostList(kingPostData);
       } catch (err) {
         console.error('Unable to load kingpost source:', err);
@@ -2661,9 +2703,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       }
 
       try {
-        const manpowerRes = await fetch(MANPOWER_URL, { cache: 'no-store' });
-        if (!manpowerRes.ok) throw new Error(`HTTP ${manpowerRes.status}`);
-        const manpowerData = await manpowerRes.json();
+        const manpowerData = await fetchWorkerJson(DATA_FILE_KEYS.manpower);
         manpowerRows = extractManpowerList(manpowerData);
       } catch (err) {
         console.error('Unable to load manpower source:', err);
@@ -2671,9 +2711,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       }
 
       try {
-        const companyManpowerRes = await fetch(COMPANY_MANPOWER_URL, { cache: 'no-store' });
-        if (!companyManpowerRes.ok) throw new Error(`HTTP ${companyManpowerRes.status}`);
-        const companyManpowerData = await companyManpowerRes.json();
+        const companyManpowerData = await fetchWorkerJson(DATA_FILE_KEYS.manpowers);
         companyManpowerRows = extractCompanyManpowerList(companyManpowerData);
       } catch (err) {
         console.error('Unable to load company manpower source:', err);
@@ -2681,9 +2719,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       }
 
       try {
-        const equipmentRes = await fetch(EQUIPMENT_URL, { cache: 'no-store' });
-        if (!equipmentRes.ok) throw new Error(`HTTP ${equipmentRes.status}`);
-        const equipmentData = await equipmentRes.json();
+        const equipmentData = await fetchWorkerJson(DATA_FILE_KEYS.equipment);
         equipmentRegistryRows = extractEquipmentRegistryList(equipmentData);
       } catch (err) {
         console.error('Unable to load equipment registry source:', err);
@@ -2691,9 +2727,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       }
 
       try {
-        const dailyReportEquipmentRes = await fetch(DAILY_REPORT_EQUIPMENT_URL, { cache: 'no-store' });
-        if (!dailyReportEquipmentRes.ok) throw new Error(`HTTP ${dailyReportEquipmentRes.status}`);
-        const dailyReportEquipmentData = await dailyReportEquipmentRes.json();
+        const dailyReportEquipmentData = await fetchWorkerJson(DATA_FILE_KEYS.dailyrigs);
         dailyReportEquipmentRows = extractDailyReportEquipmentList(dailyReportEquipmentData);
       } catch (err) {
         console.error('Unable to load daily report equipment source:', err);

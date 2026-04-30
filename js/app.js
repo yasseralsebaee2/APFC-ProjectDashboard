@@ -13,6 +13,7 @@
     const DEFAULT_PROJECT = 'Titania';
     const AUTH_STORAGE_KEY = 'apfcDashboardAuth';
     const AUTH_BRIDGE_MESSAGE_TYPE = 'APFC_AUTH';
+    const EXTERNAL_AUTH_GRACE_MS = 2800;
 
     const els = {
       authShell: document.getElementById('authShell'),
@@ -28,6 +29,9 @@
       authRequestCancelBtn: document.getElementById('authRequestCancelBtn'),
       authRequestSendBtn: document.getElementById('authRequestSendBtn'),
       authError: document.getElementById('authError'),
+      loadingShell: document.getElementById('loadingShell'),
+      loadingTitle: document.getElementById('loadingTitle'),
+      loadingMessage: document.getElementById('loadingMessage'),
       signOutBtn: document.getElementById('signOutBtn'),
       projectSelector: document.getElementById('projectSelector'),
       projectScopeBtn: document.getElementById('projectScopeBtn'),
@@ -327,6 +331,25 @@
       window.localStorage.removeItem(AUTH_STORAGE_KEY);
     }
 
+    function setAppLoading(isLoading, title = 'Preparing dashboard', message = 'Connecting to secure data sources and project context.') {
+      document.body.classList.toggle('app-loading', !!isLoading);
+      if (els.loadingShell) els.loadingShell.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
+      if (els.loadingTitle) els.loadingTitle.textContent = title || 'Preparing dashboard';
+      if (els.loadingMessage) els.loadingMessage.textContent = message || 'Connecting to secure data sources and project context.';
+    }
+
+    function wait(ms) {
+      return new Promise(resolve => window.setTimeout(resolve, ms));
+    }
+
+    function isEmbeddedDashboard() {
+      try {
+        return window.self !== window.top;
+      } catch {
+        return true;
+      }
+    }
+
     function getAllowedParentOrigins() {
       const configured = window.APFC_ALLOWED_PARENT_ORIGINS;
       if (Array.isArray(configured)) {
@@ -599,7 +622,7 @@
       if (els.authShell) els.authShell.setAttribute('aria-hidden', isLocked ? 'false' : 'true');
       if (els.authError) els.authError.textContent = errorMessage || '';
       if (isLocked) {
-        els.dataSourceChip.textContent = 'Sign In Required';
+        els.dataSourceChip.textContent = 'Secure Access Required';
       }
     }
 
@@ -692,6 +715,8 @@
         throw new Error('Power Pages sign-in did not include a user email.');
       }
 
+      setAppLoading(true, 'Signing in securely', 'Verifying your portal identity and loading project access.');
+
       const matchedUser = findUserRecord(email);
       if (!matchedUser) {
         throw new Error(`No dashboard access record was found for ${email}.`);
@@ -711,6 +736,7 @@
       renderTimelinePage(selectedProject);
       pendingExternalAuth = null;
       setAuthLocked(false);
+      setAppLoading(false);
       if (els.authPasswordInput) els.authPasswordInput.value = '';
       if (els.authError) els.authError.textContent = '';
       return bridgedUser;
@@ -739,6 +765,7 @@
           }
         } catch (err) {
           console.error(err);
+          setAppLoading(false);
           setAuthLocked(true, err.message || 'Unable to continue with Power Pages sign-in.');
         }
       });
@@ -2831,6 +2858,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
     }
 
     async function loadDashboardData() {
+      setAppLoading(true, 'Loading dashboard', 'Refreshing live project data and preparing visuals.');
       els.dataSourceChip.textContent = 'Loading Source';
       const data = await fetchWorkerJson(DATA_FILE_KEYS.piles);
       const sourceRows = extractPileList(data);
@@ -2887,12 +2915,14 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       updateCompanyDesignationOptions();
       updateCompanyAnalyticsDesignationOptions();
 
+      setAppLoading(true, 'Rendering dashboard', 'Applying role filters, summaries, and charts.');
       renderDashboard(selectedProject);
       if (activePage === 'utilization') renderUtilizationPage(selectedProject);
       if (activePage === 'manpower') renderManpowerPage(selectedProject);
       if (activePage === 'companymanpower') renderCompanyManpowerPage(selectedProject);
       if (activePage === 'companyanalytics') renderCompanyAnalyticsPage(selectedProject);
       els.dataSourceChip.textContent = 'Live Data Source';
+      setAppLoading(false);
     }
 
     async function refreshDashboardData() {
@@ -2913,6 +2943,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       } catch (err) {
         console.error(err);
         els.dataSourceChip.textContent = 'Source Error';
+        setAppLoading(false);
       } finally {
         if (els.refreshDashboardBtn) {
           els.refreshDashboardBtn.disabled = false;
@@ -7321,7 +7352,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
       if (!matchedUser) {
         resetDashboardSessionUi();
-        setAuthLocked(true, 'Your saved session is no longer valid. Sign in again.');
+        setAuthLocked(true, 'Your secure session is no longer valid. Please reopen the dashboard from the APFC portal.');
         return false;
       }
 
@@ -7331,6 +7362,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
 
     async function initDashboard() {
       try {
+        setAppLoading(true, 'Starting dashboard', 'Preparing secure session and loading access context.');
         bindMapFrameSync();
         bindExternalAuthBridge();
         await loadUsersDirectory();
@@ -7585,12 +7617,21 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         });
 
         if (!hasSession) {
+          if (isEmbeddedDashboard()) {
+            setAuthLocked(false);
+            setAppLoading(true, 'Waiting for secure sign-in', 'Checking for your Power Pages session and dashboard access.');
+            await wait(EXTERNAL_AUTH_GRACE_MS);
+          }
+
+        if (!currentUser) {
+          setAppLoading(false);
           setAuthLocked(true);
-          els.authLoginInput?.focus();
         }
+      }
       } catch (err) {
         console.error(err);
-        setAuthLocked(true, err.message || 'Unable to initialize sign in.');
+        setAppLoading(false);
+        setAuthLocked(true, err.message || 'Unable to initialize secure access.');
         els.dataSourceChip.textContent = 'Source Error';
       }
     }

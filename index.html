@@ -18,6 +18,28 @@
   <link rel="stylesheet" href="css/style.css?v=20260406-1810" />
 </head>
 <body>
+  <div class="loading-shell" id="loadingShell" aria-hidden="false">
+    <div class="loading-card">
+      <div class="loading-brand-row">
+        <img class="loading-brand loading-brand-apfc" src="assets/APFC_Logo.png" alt="APFC logo" />
+        <img class="loading-brand loading-brand-binghatti" src="assets/binghatti_logo.webp" alt="Binghatti logo" />
+      </div>
+      <div class="loading-eyebrow">APFC Project Dashboard</div>
+      <div class="loading-title" id="loadingTitle">Preparing dashboard</div>
+      <div class="loading-copy" id="loadingMessage">Connecting to secure data sources and project context.</div>
+      <div class="loading-progress">
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+      </div>
+      <div class="loading-skeleton-grid">
+        <span class="loading-skeleton loading-skeleton-wide"></span>
+        <span class="loading-skeleton"></span>
+        <span class="loading-skeleton"></span>
+        <span class="loading-skeleton loading-skeleton-wide"></span>
+      </div>
+    </div>
+  </div>
   <div class="auth-shell" id="authShell" aria-hidden="true">
     <div class="auth-card">
       <div class="auth-brand-row">
@@ -25,8 +47,8 @@
         <img class="auth-brand auth-brand-binghatti" src="assets/binghatti_logo.webp" alt="Binghatti logo" />
       </div>
       <div class="auth-eyebrow">APFC Project Dashboard</div>
-      <h1 class="auth-title">Sign In</h1>
-      <form class="auth-form" id="authForm">
+      <h1 class="auth-title">Access Required</h1>
+      <form class="auth-form auth-form-hidden" id="authForm">
         <label class="auth-field">
           <span>Username or Email</span>
           <input id="authLoginInput" type="text" autocomplete="username" placeholder="name or name@company.com" />
@@ -36,10 +58,11 @@
           <input id="authPasswordInput" type="password" autocomplete="current-password" placeholder="Enter password" />
         </label>
         <button class="auth-submit" id="authSubmitBtn" type="submit">Sign In</button>
-        <button class="auth-secondary-btn" id="authRequestAccessBtn" type="button">Request Access</button>
-        <div class="auth-note">&copy; All rights reserved APFC, BINGHATTI</div>
-        <div class="auth-error" id="authError" role="alert"></div>
       </form>
+      <button class="auth-secondary-btn" id="authRequestAccessBtn" type="button">Request Access</button>
+      <div class="auth-subnote">If you requested access before, please wait while your request is reviewed.</div>
+      <div class="auth-note">&copy; All rights reserved APFC, BINGHATTI</div>
+      <div class="auth-error" id="authError" role="alert"></div>
       <div class="auth-request-overlay" id="authRequestPanel" hidden>
         <div class="auth-request-panel">
           <div class="auth-request-title">Request Access</div>

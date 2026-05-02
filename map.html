@@ -118,8 +118,13 @@
     }
 
     .progress-card {
-      position: absolute; top: 16px; left: 16px; width: 250px; z-index: 46;
+      position: absolute; top: 16px; left: 16px; width: 240px; z-index: 46;
       transition: max-height 0.22s ease; max-height: 220px;
+      background: rgba(7, 12, 17, 0.26);
+      border-color: rgba(255,255,255,0.12);
+      box-shadow: 0 14px 32px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.1);
+      backdrop-filter: blur(14px) saturate(1.06);
+      -webkit-backdrop-filter: blur(14px) saturate(1.06);
     }
     .progress-card.collapsed { max-height: 50px; overflow: hidden; }
     .progress-card-header {
@@ -237,10 +242,23 @@
       background: rgba(255,255,255,0.08); color: #fff; border-radius: 999px; padding: 6px 9px;
       font-size: 10px; font-weight: 700; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
     }
-    .progress-toggle-btn {
-      position: absolute; right: 10px; top: 10px; z-index: 3; border: 1px solid rgba(255,255,255,0.14);
-      background: rgba(255,255,255,0.08); color: #fff; border-radius: 999px; padding: 6px 9px;
-      font-size: 10px; font-weight: 700; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    .progress-card {
+      background: rgba(9, 14, 20, 0.10);
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 18px 48px rgba(0,0,0,0.10);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .progress-card-header {
+      padding: 11px 13px 8px 13px;
+      min-height: auto;
+    }
+    .progress-card-title { color: rgba(255,255,255,0.96); }
+    .progress-card-subtitle { color: rgba(255,255,255,0.50); }
+    .progress-card-body {
+      display: flex !important;
+      padding: 0 13px 13px 13px;
+      opacity: 0.90;
     }
     .chart-content { position: relative; }
     .chart-mode-switcher, .chart-switcher { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 10px 14px; }
@@ -353,6 +371,20 @@
       font-weight: 400;
       color: #0073ff;
     }
+    .pile-label-marker.satellite .pile-label-id {
+      color: #f4fbff;
+      text-shadow:
+        0 1px 0 rgba(5,14,22,0.94),
+        0 0 8px rgba(18,32,44,0.85),
+        0 0 18px rgba(10,24,36,0.55);
+    }
+    .pile-label-marker.satellite .pile-label-type {
+      color: #cce9ff;
+      text-shadow:
+        0 1px 0 rgba(5,14,22,0.94),
+        0 0 8px rgba(18,32,44,0.85),
+        0 0 18px rgba(10,24,36,0.55);
+    }
 
     @media (max-width: 640px) {
       .progress-card, .chart-card { display: none !important; }
@@ -428,7 +460,6 @@
     <div class="progress-card-header">
       <div class="progress-card-title">Overall Progress</div>
       <div class="progress-card-subtitle">Executed piles vs total piles</div>
-      <button class="progress-toggle-btn" id="progressToggleBtn" type="button">Hide</button>
     </div>
     <div class="progress-card-body">
       <div class="progress-ring-wrap">
@@ -463,8 +494,8 @@
       <button id="visibilityToggleBtn" type="button" class="view-btn" title="Pile opacity">Fade</button>
     </div>
     <div class="visibility-body">
-      <div class="visibility-row"><span class="visibility-label">Pile opacity</span><span class="visibility-value" id="allOpacityValue">0.40</span></div>
-      <input class="visibility-slider" id="allOpacitySlider" type="range" min="0.15" max="1.00" step="0.01" value="0.40">
+      <div class="visibility-row"><span class="visibility-label">Pile opacity</span><span class="visibility-value" id="allOpacityValue">0.70</span></div>
+      <input class="visibility-slider" id="allOpacitySlider" type="range" min="0.15" max="1.00" step="0.01" value="0.70">
     </div>
   </div>
   </div>
@@ -648,9 +679,8 @@
       }
     };
 
-    let allBaseOpacity = 0.40;
+    let allBaseOpacity = 0.70;
     let isVisibilityCollapsed = true;
-    let isProgressCollapsed = true;
     let isChartCollapsed = true;
     let currentMetric = 'pileCount';
     let currentChartMode = 'daily';
@@ -664,8 +694,9 @@
     let pileLayer = null;
     let mapContentBootstrapped = false;
     let hoverRaf = 0;
-    let lastHoverRecordId = null;
+    let lastHoverRecordKey = null;
     let isMapInteracting = false;
+    const supportsHoverInput = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
     function normalizeText(value) {
       return String(value || '').trim();
@@ -1042,6 +1073,17 @@
     function normalizeTestsValue(value) {
       return String(value || '').trim().toLowerCase();
     }
+    function buildMapRecordKey(elementType, row, idValue, index) {
+      return [
+        elementType,
+        normalizeText(row?.project || row?.Project),
+        normalizeText(row?.plot || row?.Plot),
+        normalizeText(idValue),
+        normalizeText(row?.design_x),
+        normalizeText(row?.design_y),
+        String(index ?? '')
+      ].join('|');
+    }
     function getTestType(row) {
       const raw = normalizeTestsValue(row.tests);
       if (!raw) return '';
@@ -1207,12 +1249,14 @@
 
     function buildPileRecords(rows) {
       const latestExecutionKey = getLatestExecutionDateKey(rows);
-      return rows.map(row => {
+      return rows.map((row, index) => {
         const lngLat = dltmToWgs84(row.design_x, row.design_y);
         if (!lngLat) return null;
+        const id = normalizeId(row.id);
         return {
           row,
-          id: normalizeId(row.id),
+          id,
+          recordKey: buildMapRecordKey('pile', row, id, index),
           elementType: 'pile',
           lngLat,
           radiusM: getPileRadiusMeters(row),
@@ -1225,7 +1269,7 @@
     }
 
     function buildKingPostRecords(rows) {
-      return rows.map(row => {
+      return rows.map((row, index) => {
         const frontLngLat = dltmToWgs84(row.design_x, row.design_y);
         const backLngLat = dltmToWgs84(row.design_back_x, row.design_back_y);
         const centerLngLat = (
@@ -1244,9 +1288,11 @@
         const profile = parseKingPostProfile(row.profile);
         const heightM = Math.max(parseNumber(row.design_depthdrilling), 0.5);
         const stateKey = getKingPostStateKey(row);
+        const id = normalizeId(row.pileId);
         return {
           row,
-          id: normalizeId(row.pileId),
+          id,
+          recordKey: buildMapRecordKey('kingpost', row, id, index),
           elementType: 'kingpost',
           lngLat,
           frontLngLat,
@@ -1289,6 +1335,71 @@
       ];
     }
 
+    function getCurrentScopedElementRecords() {
+      const scope = getActiveScope();
+      const scoped = [
+        ...pileRecords.filter(record => matchesScope(record.row, scope)),
+        ...kingPostRecords.filter(record => matchesScope(record.row, scope))
+      ];
+      return scoped.length ? scoped : [...pileRecords, ...kingPostRecords];
+    }
+
+    function getStrictScopedElementRecords() {
+      const scope = getActiveScope();
+      return [
+        ...pileRecords.filter(record => matchesScope(record.row, scope)),
+        ...kingPostRecords.filter(record => matchesScope(record.row, scope))
+      ];
+    }
+
+    function getLabelLodSettings() {
+      const zoom = map.getZoom();
+      const touchScale = supportsHoverInput ? 1 : 0.72;
+      if (zoom < 15.8) return { show: false, showType: false, maxCount: 0 };
+      if (zoom < 16.6) return { show: true, showType: false, maxCount: Math.max(18, Math.round(40 * touchScale)) };
+      if (zoom < 17.5) return { show: true, showType: false, maxCount: Math.max(36, Math.round(90 * touchScale)) };
+      if (zoom < 18.1) return { show: true, showType: false, maxCount: Math.max(70, Math.round(180 * touchScale)) };
+      if (zoom < 18.55) return { show: true, showType: true, maxCount: Math.max(140, Math.round(340 * touchScale)) };
+      return { show: true, showType: true, maxCount: Number.MAX_SAFE_INTEGER };
+    }
+
+    function sampleRecordsEvenly(records, maxCount) {
+      if (!Array.isArray(records) || maxCount <= 0) return [];
+      if (records.length <= maxCount) return records.slice();
+      const step = records.length / maxCount;
+      const sampled = [];
+      for (let i = 0; i < maxCount; i += 1) {
+        sampled.push(records[Math.floor(i * step)]);
+      }
+      return sampled;
+    }
+
+    function getLabelRecordsForCurrentView() {
+      const lod = getLabelLodSettings();
+      if (!lod.show) return { records: [], showType: false };
+      const scoped = getCurrentScopedElementRecords().sort((a, b) => {
+        if (a.elementType !== b.elementType) return a.elementType.localeCompare(b.elementType);
+        return String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true, sensitivity: 'base' });
+      });
+      const featuredKeys = new Set([pileLayer?.highlightedId, pileLayer?.hoveredId].filter(Boolean));
+      const featured = scoped.filter(record => featuredKeys.has(record.recordKey));
+      const remaining = scoped.filter(record => !featuredKeys.has(record.recordKey));
+      const sampled = sampleRecordsEvenly(remaining, Math.max(0, lod.maxCount - featured.length));
+      const merged = [...featured, ...sampled];
+      const deduped = [];
+      const seen = new Set();
+      merged.forEach(record => {
+        if (!record?.recordKey || seen.has(record.recordKey)) return;
+        seen.add(record.recordKey);
+        deduped.push(record);
+      });
+      return { records: deduped, showType: lod.showType };
+    }
+
+    function getInteractionRecordsForCurrentView() {
+      return getCurrentScopedElementRecords();
+    }
+
     function getRecordCentroid(records) {
       if (!records.length) return DEFAULT_SITE_CENTER;
       const sum = records.reduce((acc, rec) => {
@@ -1328,6 +1439,60 @@
         [minLng - lngPad, minLat - latPad],
         [maxLng + lngPad, maxLat + latPad]
       );
+    }
+
+    function boundsToPolygonCoordinates(bounds) {
+      if (!bounds) return null;
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+      if (!sw || !ne) return null;
+      return [[
+        [sw.lng, sw.lat],
+        [ne.lng, sw.lat],
+        [ne.lng, ne.lat],
+        [sw.lng, ne.lat],
+        [sw.lng, sw.lat]
+      ]];
+    }
+
+    function buildProjectFocusGeoJson(scope) {
+      const focusedRecords = getFocusRecords(getFocusedElementRecords(scope));
+      const bounds = getRecordBounds(focusedRecords);
+      const focusCoords = boundsToPolygonCoordinates(bounds);
+      if (!focusCoords) {
+        return {
+          type: 'FeatureCollection',
+          features: []
+        };
+      }
+      const outsideCoords = [[
+        [-180, -85],
+        [180, -85],
+        [180, 85],
+        [-180, 85],
+        [-180, -85]
+      ], focusCoords[0]];
+      return {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { zone: 'outside' },
+            geometry: {
+              type: 'Polygon',
+              coordinates: outsideCoords
+            }
+          },
+          {
+            type: 'Feature',
+            properties: { zone: 'inside' },
+            geometry: {
+              type: 'Polygon',
+              coordinates: focusCoords
+            }
+          }
+        ]
+      };
     }
 
     function getFocusRecords(records) {
@@ -1447,7 +1612,6 @@
     const chartContent = document.getElementById('chartContent');
     const chartToggleBtn = document.getElementById('chartToggleBtn');
     const progressCardBody = progressCard.querySelector('.progress-card-body');
-    const progressToggleBtn = document.getElementById('progressToggleBtn');
     const chartArea = document.getElementById('chartArea');
     const chartSvg = document.getElementById('chartSvg');
     const chartTooltip = document.getElementById('chartTooltip');
@@ -1480,13 +1644,6 @@
     }
     if (chartToggleBtn) chartToggleBtn.addEventListener('click', () => { isChartCollapsed = !isChartCollapsed; applyChartCollapsedState(); });
 
-    function applyProgressCollapsedState() {
-      progressCard.classList.toggle('collapsed', isProgressCollapsed);
-      if (progressCardBody) progressCardBody.style.display = isProgressCollapsed ? 'none' : 'flex';
-      progressToggleBtn.textContent = isProgressCollapsed ? 'Show' : 'Hide';
-    }
-    progressToggleBtn.addEventListener('click', () => { isProgressCollapsed = !isProgressCollapsed; applyProgressCollapsedState(); });
-
     function applyVisibilityCollapsedState() {
       visibilityBody.style.display = isVisibilityCollapsed ? 'none' : 'flex';
       const visibilityCard = document.querySelector('.visibility-card');
@@ -1498,12 +1655,19 @@
     visibilityToggleBtn.addEventListener('click', () => { isVisibilityCollapsed = !isVisibilityCollapsed; applyVisibilityCollapsedState(); });
 
     function renderProgressCard() {
-      const scopedPiles = getFocusedWidgetPiles();
-      const total = scopedPiles.length;
-      const executed = scopedPiles.filter(isExecutedRow).length;
+      const scopedRecords = getStrictScopedElementRecords();
+      const pileCount = scopedRecords.filter(record => record.elementType === 'pile').length;
+      const kingPostCount = scopedRecords.filter(record => record.elementType === 'kingpost').length;
+      const total = scopedRecords.length;
+      const executed = scopedRecords.filter(record => {
+        if (record.elementType === 'kingpost') return !!record.installed;
+        return !!record.executed;
+      }).length;
       const remaining = Math.max(0, total - executed);
       const percent = total ? (executed / total) * 100 : 0;
-      const latestDate = scopedPiles.filter(isExecutedRow).map(p => normalizeDateString(p.castingDate)).filter(Boolean).sort().slice(-1)[0] || '';
+      const subtitle = kingPostCount && !pileCount
+        ? 'Installed elements vs total elements'
+        : (pileCount && kingPostCount ? 'Completed elements vs total elements' : 'Executed piles vs total piles');
       const radius = 40;
       const circumference = 2 * Math.PI * radius;
       const offset = circumference * (1 - percent / 100);
@@ -1513,7 +1677,8 @@
       progressExecuted.textContent = executed.toLocaleString();
       progressRemaining.textContent = remaining.toLocaleString();
       progressTotal.textContent = total.toLocaleString();
-
+      const subtitleEl = document.querySelector('.progress-card-subtitle');
+      if (subtitleEl) subtitleEl.textContent = subtitle;
     }
 
     function renderChart(metric = currentMetric) {
@@ -1648,6 +1813,7 @@
       const is3D = mode === '3d';
       planViewBtn.classList.toggle('active', !is3D);
       view3DBtn.classList.toggle('active', is3D);
+      if (pileLayer) pileLayer.setViewMode(is3D);
       const scope = getActiveScope();
       const focusedRecords = getFocusedElementRecords(scope);
       const focusRecords = getFocusRecords(focusedRecords);
@@ -1778,6 +1944,82 @@
       }
 
       return true;
+    }
+
+    function removeProjectFocusLayers() {
+      try { if (map.getLayer('project-focus-outline-crisp')) map.removeLayer('project-focus-outline-crisp'); } catch (err) {}
+      try { if (map.getLayer('project-focus-outline-glow')) map.removeLayer('project-focus-outline-glow'); } catch (err) {}
+      try { if (map.getLayer('project-focus-outline')) map.removeLayer('project-focus-outline'); } catch (err) {}
+      try { if (map.getLayer('project-focus-fill')) map.removeLayer('project-focus-fill'); } catch (err) {}
+      try { if (map.getSource('project-focus-src')) map.removeSource('project-focus-src'); } catch (err) {}
+    }
+
+    function ensureProjectFocusLayers() {
+      if (!isSatellite) {
+        removeProjectFocusLayers();
+        return;
+      }
+      const data = buildProjectFocusGeoJson(getActiveScope());
+      if (!map.getSource('project-focus-src')) {
+        map.addSource('project-focus-src', { type: 'geojson', data });
+      } else {
+        map.getSource('project-focus-src').setData(data);
+      }
+      const beforeLayerId = map.getLayer('threejs-piles')
+        ? 'threejs-piles'
+        : (map.getStyle()?.layers || []).find(layer => layer.type === 'symbol')?.id;
+      if (!map.getLayer('project-focus-fill')) {
+        map.addLayer({
+          id: 'project-focus-fill',
+          type: 'fill',
+          source: 'project-focus-src',
+          filter: ['==', ['get', 'zone'], 'inside'],
+          paint: {
+            'fill-color': '#ffffff',
+            'fill-opacity': 0.18
+          }
+        }, beforeLayerId);
+      }
+      if (!map.getLayer('project-focus-outline-glow')) {
+        map.addLayer({
+          id: 'project-focus-outline-glow',
+          type: 'line',
+          source: 'project-focus-src',
+          filter: ['==', ['get', 'zone'], 'inside'],
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 4.2,
+            'line-opacity': 0.12,
+            'line-blur': 1.6
+          }
+        }, beforeLayerId);
+      }
+      if (!map.getLayer('project-focus-outline')) {
+        map.addLayer({
+          id: 'project-focus-outline',
+          type: 'line',
+          source: 'project-focus-src',
+          filter: ['==', ['get', 'zone'], 'inside'],
+          paint: {
+            'line-color': '#f6fbff',
+            'line-width': 1.1,
+            'line-opacity': 0.88
+          }
+        }, beforeLayerId);
+      }
+      if (!map.getLayer('project-focus-outline-crisp')) {
+        map.addLayer({
+          id: 'project-focus-outline-crisp',
+          type: 'line',
+          source: 'project-focus-src',
+          filter: ['==', ['get', 'zone'], 'inside'],
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 0.55,
+            'line-opacity': 0.94
+          }
+        }, beforeLayerId);
+      }
     }
 
     function keepNativeLabelsAboveRaster() {
@@ -1935,6 +2177,10 @@
       ensureExternalSatelliteRasterLayer();
       setSatelliteOverlayVisibility();
       if (pileLayer && !map.getLayer(pileLayer.id)) map.addLayer(pileLayer);
+      if (pileLayer && map.getLayer(pileLayer.id) && (pileRecords.length || kingPostRecords.length) && !pileLayer.meshes.length) {
+        pileLayer.buildPiles();
+      }
+      ensureProjectFocusLayers();
       refreshOperationalWidgets();
       if (isSatellite) {
         ensureSatelliteBuildingsWithRetry();
@@ -1973,7 +2219,6 @@
 
 */
     function getPreferredViewMode() {
-      if (isSatellite) return '3d';
       return view3DBtn.classList.contains('active') ? '3d' : '2d';
     }
 
@@ -2105,27 +2350,88 @@
       openPilePanel(record);
     }
 
+    function getPileStateKey(record) {
+      if (record?.executedYesterday) return 'yesterday';
+      if (record?.executed) return 'executed';
+      return 'remaining';
+    }
+    function getPileBaseColor(record) {
+      const stateKey = getPileStateKey(record);
+      if (stateKey === 'yesterday') return MAP_PREMIUM.colors.yesterday;
+      if (stateKey === 'executed') return MAP_PREMIUM.colors.executed;
+      return MAP_PREMIUM.colors.remaining;
+    }
+    function getPileBaseEmissive(record) {
+      const stateKey = getPileStateKey(record);
+      if (stateKey === 'yesterday') return MAP_PREMIUM.colors.yesterdayEmissive;
+      if (stateKey === 'executed') return MAP_PREMIUM.colors.executedEmissive;
+      return MAP_PREMIUM.colors.remainingEmissive;
+    }
+    function getPileEmissiveIntensity(record) {
+      const stateKey = getPileStateKey(record);
+      if (stateKey === 'yesterday') return 0.62;
+      if (stateKey === 'executed') return 0.34;
+      return 0.03;
+    }
+    function getPileInteractiveVisual(record, mode = 'normal') {
+      const stateKey = getPileStateKey(record);
+      if (mode === 'selected') {
+        return {
+          color: record.executed ? (record.executedYesterday ? 0xffc162 : 0x38ff9d) : MAP_PREMIUM.colors.selected,
+          emissive: getPileBaseEmissive(record),
+          emissiveIntensity: record.executedYesterday ? 1.0 : 0.88,
+          opacity: 0.92
+        };
+      }
+      if (mode === 'hover') {
+        return {
+          color: record.executed ? (record.executedYesterday ? 0xffc162 : 0x36ff9c) : 0xffffff,
+          emissive: getPileBaseEmissive(record),
+          emissiveIntensity: record.executedYesterday ? 0.86 : 0.58,
+          opacity: Math.min(0.94, getNormalOpacity(record) + 0.2)
+        };
+      }
+      return {
+        color: getPileBaseColor(record),
+        emissive: getPileBaseEmissive(record),
+        emissiveIntensity: getPileEmissiveIntensity(record),
+        opacity: getNormalOpacity(record)
+      };
+    }
+    function createPileDisplayMesh(record, localX, localY, visualMode = 'normal', isThreeDimensional = false) {
+      const visual = getPileInteractiveVisual(record, visualMode);
+      const effectiveOpacity = isThreeDimensional ? 1 : visual.opacity;
+      const geometry = new THREE.CylinderGeometry(record.radiusM, record.radiusM, record.heightM, PILE_SEGMENTS, 1, false);
+      geometry.rotateX(Math.PI / 2);
+      const material = new THREE.MeshPhongMaterial({
+        color: visual.color,
+        transparent: !isThreeDimensional && effectiveOpacity < 0.999,
+        opacity: effectiveOpacity,
+        shininess: 145,
+        specular: 0xcfd7df,
+        flatShading: false,
+        side: THREE.DoubleSide,
+        depthTest: true,
+        depthWrite: true,
+        polygonOffset: visualMode !== 'normal',
+        polygonOffsetFactor: visualMode !== 'normal' ? -1 : 0,
+        polygonOffsetUnits: visualMode !== 'normal' ? -2 : 0
+      });
+      material.emissive = new THREE.Color(visual.emissive);
+      material.emissiveIntensity = visual.emissiveIntensity;
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.userData.record = record;
+      mesh.userData.originalHeight = record.heightM;
+      mesh.userData.anchorMode = 'center';
+      mesh.position.set(localX, localY, -(record.heightM / 2 + 0.02));
+      mesh.frustumCulled = false;
+      mesh.renderOrder = visualMode === 'normal' ? 999 : 1001;
+      return mesh;
+    }
+
     function refreshPileAppearance() {
       if (!pileLayer) return;
-      pileLayer.meshes.forEach(mesh => {
-        const record = mesh.userData.record;
-        const isSelected = record.id === pileLayer.highlightedId;
-        const isHovered = record.id === pileLayer.hoveredId;
-        if (isSelected || isHovered) return;
-        mesh.material.color.setHex(record.color);
-        if (record.elementType === 'kingpost') {
-          mesh.material.emissive = new THREE.Color(getKingPostEmissiveColor(record));
-          mesh.material.emissiveIntensity = record.stateKey === 'installed' ? 0.24 : (record.stateKey === 'ready' ? 0.2 : 0.12);
-        } else if (record.executed) {
-          mesh.material.emissive = new THREE.Color(record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : MAP_PREMIUM.colors.executedEmissive);
-          mesh.material.emissiveIntensity = record.executedYesterday ? 0.62 : 0.34;
-        } else {
-          mesh.material.emissive = new THREE.Color(MAP_PREMIUM.colors.remainingEmissive);
-          mesh.material.emissiveIntensity = 0.03;
-        }
-        mesh.material.opacity = getNormalOpacity(record);
-      });
-      if (pileLayer.map) pileLayer.map.triggerRepaint();
+      pileLayer.refreshAppearance();
     }
 
     function bindVisibilityControls() {
@@ -2221,7 +2527,80 @@
       return shape;
     }
 
-    function createKingPostMesh(record, localX, localY) {
+    const kingPostUnitGeometryCache = new Map();
+    function getKingPostProfileKey(profile) {
+      if (!profile) return 'ub-default';
+      return [
+        profile.profile || 'UB',
+        Number(profile.depthM || 0).toFixed(4),
+        Number(profile.widthM || 0).toFixed(4),
+        Number(profile.flangeThickness || 0).toFixed(4),
+        Number(profile.webThickness || 0).toFixed(4)
+      ].join('|');
+    }
+    function getKingPostUnitGeometry(profile) {
+      const key = getKingPostProfileKey(profile);
+      if (kingPostUnitGeometryCache.has(key)) return kingPostUnitGeometryCache.get(key);
+      const shape = createKingPostShape(profile);
+      const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: 1,
+        bevelEnabled: false,
+        curveSegments: 1,
+        steps: 1
+      });
+      geometry.translate(0, 0, -1);
+      kingPostUnitGeometryCache.set(key, geometry);
+      return geometry;
+    }
+
+    function getKingPostInteractiveVisual(record, mode = 'normal') {
+      if (mode === 'selected') {
+        return {
+          color: record.stateKey === 'installed' ? 0xeef6ff : (record.stateKey === 'ready' ? 0xffd9a5 : 0xf5e6cf),
+          emissive: getKingPostEmissiveColor(record),
+          emissiveIntensity: 0.92,
+          opacity: 0.92
+        };
+      }
+      if (mode === 'hover') {
+        return {
+          color: record.stateKey === 'installed' ? 0xaad4ff : (record.stateKey === 'ready' ? 0xffc979 : 0xf0d4a9),
+          emissive: getKingPostEmissiveColor(record),
+          emissiveIntensity: record.stateKey === 'ready' ? 0.72 : 0.62,
+          opacity: Math.min(0.94, getNormalOpacity(record) + 0.2)
+        };
+      }
+      return {
+        color: record.color,
+        emissive: getKingPostEmissiveColor(record),
+        emissiveIntensity: record.stateKey === 'installed' ? 0.24 : (record.stateKey === 'ready' ? 0.2 : 0.12),
+        opacity: getNormalOpacity(record)
+      };
+    }
+
+    function applyKingPostMeshVisual(mesh, isThreeDimensional, mode = 'normal') {
+      if (!mesh?.material) return;
+      const record = mesh.userData?.record;
+      if (!record) return;
+      const visual = getKingPostInteractiveVisual(record, mode);
+      mesh.material.color.setHex(visual.color);
+      mesh.material.emissive = new THREE.Color(visual.emissive);
+      mesh.material.emissiveIntensity = visual.emissiveIntensity;
+      mesh.material.transparent = !isThreeDimensional && visual.opacity < 0.999;
+      mesh.material.opacity = isThreeDimensional ? 1 : visual.opacity;
+      mesh.material.depthTest = true;
+      mesh.material.depthWrite = true;
+      mesh.material.needsUpdate = true;
+      mesh.children.forEach(child => {
+        if (!child?.material) return;
+        child.material.depthTest = true;
+        child.material.depthWrite = false;
+        child.material.transparent = true;
+        child.material.needsUpdate = true;
+      });
+    }
+
+    function createKingPostMesh(record, localX, localY, visualMode = 'normal', isThreeDimensional = false) {
       const height = record.heightM;
       const shape = createKingPostShape(record.profile);
       const geometry = new THREE.ExtrudeGeometry(shape, {
@@ -2233,14 +2612,14 @@
       geometry.translate(0, 0, -height);
       const material = new THREE.MeshPhongMaterial({
         color: record.color,
-        transparent: true,
-        opacity: getNormalOpacity(record),
+        transparent: !isThreeDimensional && getNormalOpacity(record) < 0.999,
+        opacity: isThreeDimensional ? 1 : getNormalOpacity(record),
         shininess: 155,
         specular: 0xffffff,
         flatShading: false,
         side: THREE.DoubleSide,
-        depthTest: false,
-        depthWrite: false
+        depthTest: true,
+        depthWrite: true
       });
       const mesh = new THREE.Mesh(geometry, material);
       const edgeGeometry = new THREE.EdgesGeometry(geometry, 10);
@@ -2281,6 +2660,7 @@
       };
       mesh.frustumCulled = false;
       mesh.renderOrder = 998;
+      applyKingPostMeshVisual(mesh, isThreeDimensional, visualMode);
       return mesh;
     }
 
@@ -2288,18 +2668,24 @@
       constructor(id) {
         this.id = id;
         this.type = 'custom';
-        this.renderingMode = '2d';
+        this.renderingMode = '3d';
         this.map = null;
         this.camera = null;
         this.scene = null;
         this.renderer = null;
         this.rootGroup = null;
         this.meshes = [];
+        this.pileInstanceMeshes = [];
+        this.kingPostMeshes = [];
+        this.kingPostInstanceMeshes = [];
         this.testIndicators = [];
+        this.highlightOverlayMesh = null;
+        this.hoverOverlayMesh = null;
         this.combinedMatrix = null;
         this.highlightedId = null;
         this.hoveredId = null;
         this.isSatelliteMode = false;
+        this.isThreeDimensional = false;
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         this.centerMerc = mapboxgl.MercatorCoordinate.fromLngLat(SITE_CENTER, 0);
@@ -2333,7 +2719,7 @@
           antialias: true
         });
         this.renderer.autoClear = false;
-        this.renderer.sortObjects = false;
+        this.renderer.sortObjects = true;
         this.buildPiles();
       }
 
@@ -2343,7 +2729,20 @@
           disposeThreeNode(child);
         }
         this.meshes = [];
+        this.pileInstanceMeshes = [];
+        this.kingPostMeshes = [];
+        this.kingPostInstanceMeshes = [];
         this.testIndicators = [];
+        this.highlightOverlayMesh = null;
+        this.hoverOverlayMesh = null;
+
+        const pileGeometry = new THREE.CylinderGeometry(1, 1, 1, PILE_SEGMENTS, 1, false);
+        pileGeometry.rotateX(Math.PI / 2);
+        const pileStateBuckets = {
+          remaining: [],
+          executed: [],
+          yesterday: []
+        };
 
         pileRecords.forEach(record => {
           const merc = mapboxgl.MercatorCoordinate.fromLngLat(record.lngLat, 0);
@@ -2351,29 +2750,8 @@
           const localY = (merc.y - this.centerMerc.y) / this.modelTransform.scale;
           const radius = record.radiusM;
           const height = record.heightM;
-          const geometry = new THREE.CylinderGeometry(radius, radius, height, PILE_SEGMENTS, 1, false);
-          geometry.rotateX(Math.PI / 2);
-          const material = new THREE.MeshPhongMaterial({
-            color: record.color,
-            transparent: true,
-            opacity: getNormalOpacity(record),
-            shininess: 145,
-            specular: 0xcfd7df,
-            flatShading: false,
-            side: THREE.DoubleSide,
-            depthTest: false,
-            depthWrite: false
-          });
-          const mesh = new THREE.Mesh(geometry, material);
-          mesh.userData.record = record;
-          mesh.userData.originalHeight = height;
-          mesh.userData.anchorMode = 'center';
-          mesh.position.set(localX, localY, -(height / 2 + 0.02));
           record._local3d = { x: localX, y: localY, zCenter: -(height / 2 + 0.02), height, effectiveHeight: height, radius, topZ: -0.02 };
-          mesh.frustumCulled = false;
-          mesh.renderOrder = 999;
-          this.rootGroup.add(mesh);
-          this.meshes.push(mesh);
+          pileStateBuckets[getPileStateKey(record)].push(record);
 
           const indicator = build3DTestIndicator(record);
           if (indicator) {
@@ -2382,23 +2760,116 @@
           }
         });
 
+        const tempMatrix = new THREE.Matrix4();
+        const tempPosition = new THREE.Vector3();
+        const tempQuaternion = new THREE.Quaternion();
+        const tempScale = new THREE.Vector3();
+        ['remaining', 'executed', 'yesterday'].forEach(stateKey => {
+          const records = pileStateBuckets[stateKey];
+          if (!records.length) return;
+          const sampleRecord = records[0];
+          const visual = getPileInteractiveVisual(sampleRecord, 'normal');
+          const material = new THREE.MeshPhongMaterial({
+            color: visual.color,
+            transparent: !this.isThreeDimensional && visual.opacity < 0.999,
+            opacity: this.isThreeDimensional ? 1 : visual.opacity,
+            shininess: 145,
+            specular: 0xcfd7df,
+            flatShading: false,
+            side: THREE.DoubleSide,
+            depthTest: true,
+            depthWrite: true
+          });
+          material.emissive = new THREE.Color(visual.emissive);
+          material.emissiveIntensity = visual.emissiveIntensity;
+          const instancedMesh = new THREE.InstancedMesh(pileGeometry, material, records.length);
+          instancedMesh.userData.records = records;
+          instancedMesh.userData.elementType = 'pile-instanced';
+          instancedMesh.frustumCulled = false;
+          instancedMesh.renderOrder = 999;
+          records.forEach((record, index) => {
+            tempPosition.set(record._local3d.x, record._local3d.y, record._local3d.zCenter);
+            tempScale.set(record.radiusM, record.radiusM, record.heightM);
+            tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
+            instancedMesh.setMatrixAt(index, tempMatrix);
+            record._instanceStateKey = stateKey;
+            record._instanceIndex = index;
+          });
+          instancedMesh.instanceMatrix.needsUpdate = true;
+          this.rootGroup.add(instancedMesh);
+          this.pileInstanceMeshes.push(instancedMesh);
+          this.meshes.push(instancedMesh);
+        });
+
+        const kingPostBuckets = new Map();
         kingPostRecords.forEach(record => {
           const merc = mapboxgl.MercatorCoordinate.fromLngLat(record.lngLat, 0);
           const localX = (merc.x - this.centerMerc.x) / this.modelTransform.scale;
           const localY = (merc.y - this.centerMerc.y) / this.modelTransform.scale;
-          const mesh = createKingPostMesh(record, localX, localY);
-          this.rootGroup.add(mesh);
-          this.meshes.push(mesh);
+          record._local3d = {
+            x: localX,
+            y: localY,
+            zCenter: -0.02,
+            height: record.heightM,
+            effectiveHeight: record.heightM,
+            radius: record.radiusM,
+            topZ: -0.02
+          };
+          const bucketKey = `${getKingPostProfileKey(record.profile)}|${record.stateKey}`;
+          if (!kingPostBuckets.has(bucketKey)) {
+            kingPostBuckets.set(bucketKey, {
+              profile: record.profile,
+              stateKey: record.stateKey,
+              records: []
+            });
+          }
+          kingPostBuckets.get(bucketKey).records.push(record);
         });
+
+        kingPostBuckets.forEach(bucket => {
+          const sampleRecord = bucket.records[0];
+          const visual = getKingPostInteractiveVisual(sampleRecord, 'normal');
+          const geometry = getKingPostUnitGeometry(bucket.profile);
+          const material = new THREE.MeshPhongMaterial({
+            color: visual.color,
+            transparent: !this.isThreeDimensional && visual.opacity < 0.999,
+            opacity: this.isThreeDimensional ? 1 : visual.opacity,
+            shininess: 150,
+            specular: 0xffffff,
+            flatShading: false,
+            side: THREE.DoubleSide,
+            depthTest: true,
+            depthWrite: true
+          });
+          material.emissive = new THREE.Color(visual.emissive);
+          material.emissiveIntensity = visual.emissiveIntensity;
+          const instancedMesh = new THREE.InstancedMesh(geometry, material, bucket.records.length);
+          instancedMesh.userData.records = bucket.records;
+          instancedMesh.userData.elementType = 'kingpost-instanced';
+          instancedMesh.frustumCulled = false;
+          instancedMesh.renderOrder = 998;
+          bucket.records.forEach((record, index) => {
+            tempPosition.set(record._local3d.x, record._local3d.y, record._local3d.zCenter);
+            tempQuaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Number(record.rotationZ || 0));
+            tempScale.set(1, 1, record.heightM);
+            tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
+            instancedMesh.setMatrixAt(index, tempMatrix);
+          });
+          instancedMesh.instanceMatrix.needsUpdate = true;
+          this.rootGroup.add(instancedMesh);
+          this.kingPostInstanceMeshes.push(instancedMesh);
+          this.meshes.push(instancedMesh);
+        });
+        this.syncPileOverlayMeshes();
         this.applySatelliteMode(this.isSatelliteMode);
       }
 
       applySatelliteMode(enabled) {
         this.isSatelliteMode = !!enabled;
-        this.meshes.forEach(mesh => {
-          const record = mesh.userData.record;
-          const originalHeight = Number(mesh.userData.originalHeight || record?._local3d?.height || 0);
-          if (!originalHeight || !record?._local3d) return;
+        [this.highlightOverlayMesh, this.hoverOverlayMesh].forEach(mesh => {
+          const record = mesh?.userData?.record;
+          const originalHeight = Number(mesh?.userData?.originalHeight || record?._local3d?.height || 0);
+          if (!mesh || !originalHeight || !record?._local3d) return;
           const visibleHeight = originalHeight;
           mesh.scale.z = visibleHeight / originalHeight;
           mesh.position.z = mesh.userData.anchorMode === 'top' ? -0.02 : -(visibleHeight / 2 + 0.02);
@@ -2408,72 +2879,103 @@
         if (this.map) this.map.triggerRepaint();
       }
 
+      getPileRecordByKey(recordKey) {
+        if (!recordKey) return null;
+        return pileRecords.find(record => record.recordKey === recordKey) || null;
+      }
+
+      getRecordByKey(recordKey) {
+        if (!recordKey) return null;
+        return pileRecords.find(record => record.recordKey === recordKey)
+          || kingPostRecords.find(record => record.recordKey === recordKey)
+          || null;
+      }
+
+      replaceOverlayMesh(currentMesh, nextMesh) {
+        if (currentMesh) {
+          this.rootGroup.remove(currentMesh);
+          this.meshes = this.meshes.filter(mesh => mesh !== currentMesh);
+          disposeThreeNode(currentMesh);
+        }
+        if (nextMesh) {
+          this.rootGroup.add(nextMesh);
+          this.meshes.push(nextMesh);
+        }
+        return nextMesh || null;
+      }
+
+      syncPileOverlayMeshes() {
+        const selectedRecord = this.getRecordByKey(this.highlightedId);
+        const hoveredRecord = this.hoveredId && this.hoveredId !== this.highlightedId
+          ? this.getRecordByKey(this.hoveredId)
+          : null;
+
+        const selectedMesh = selectedRecord
+          ? (
+            selectedRecord.elementType === 'kingpost'
+              ? createKingPostMesh(selectedRecord, selectedRecord._local3d?.x || 0, selectedRecord._local3d?.y || 0, 'selected', this.isThreeDimensional)
+              : createPileDisplayMesh(selectedRecord, selectedRecord._local3d?.x || 0, selectedRecord._local3d?.y || 0, 'selected', this.isThreeDimensional)
+          )
+          : null;
+        const hoveredMesh = hoveredRecord
+          ? (
+            hoveredRecord.elementType === 'kingpost'
+              ? createKingPostMesh(hoveredRecord, hoveredRecord._local3d?.x || 0, hoveredRecord._local3d?.y || 0, 'hover', this.isThreeDimensional)
+              : createPileDisplayMesh(hoveredRecord, hoveredRecord._local3d?.x || 0, hoveredRecord._local3d?.y || 0, 'hover', this.isThreeDimensional)
+          )
+          : null;
+
+        this.highlightOverlayMesh = this.replaceOverlayMesh(this.highlightOverlayMesh, selectedMesh);
+        this.hoverOverlayMesh = this.replaceOverlayMesh(this.hoverOverlayMesh, hoveredMesh);
+      }
+
+      refreshAppearance() {
+        this.pileInstanceMeshes.forEach(mesh => {
+          const records = Array.isArray(mesh.userData.records) ? mesh.userData.records : [];
+          const sampleRecord = records[0];
+          if (!sampleRecord) return;
+          const visual = getPileInteractiveVisual(sampleRecord, 'normal');
+          mesh.material.color.setHex(visual.color);
+          mesh.material.emissive = new THREE.Color(visual.emissive);
+          mesh.material.emissiveIntensity = visual.emissiveIntensity;
+          mesh.material.transparent = !this.isThreeDimensional && visual.opacity < 0.999;
+          mesh.material.opacity = this.isThreeDimensional ? 1 : visual.opacity;
+          mesh.material.needsUpdate = true;
+        });
+        this.kingPostInstanceMeshes.forEach(mesh => {
+          const records = Array.isArray(mesh.userData.records) ? mesh.userData.records : [];
+          const sampleRecord = records[0];
+          if (!sampleRecord) return;
+          const visual = getKingPostInteractiveVisual(sampleRecord, 'normal');
+          mesh.material.color.setHex(visual.color);
+          mesh.material.emissive = new THREE.Color(visual.emissive);
+          mesh.material.emissiveIntensity = visual.emissiveIntensity;
+          mesh.material.transparent = !this.isThreeDimensional && visual.opacity < 0.999;
+          mesh.material.opacity = this.isThreeDimensional ? 1 : visual.opacity;
+          mesh.material.needsUpdate = true;
+        });
+        this.syncPileOverlayMeshes();
+        if (this.map) this.map.triggerRepaint();
+      }
+
+      setViewMode(isThreeDimensional) {
+        const nextValue = !!isThreeDimensional;
+        if (this.isThreeDimensional === nextValue) return;
+        this.isThreeDimensional = nextValue;
+        this.refreshAppearance();
+      }
+
       setHighlightedPile(recordId) {
         if (this.highlightedId === recordId) return;
         this.highlightedId = recordId;
-        this.meshes.forEach(mesh => {
-          const record = mesh.userData.record;
-          const isSelected = record.id === recordId;
-          const isExecuted = record.executed;
-          if (isSelected) {
-            const selectedColor = record.elementType === 'kingpost'
-              ? (record.stateKey === 'installed' ? 0xeef6ff : (record.stateKey === 'ready' ? 0xffd9a5 : 0xf5e6cf))
-              : (isExecuted ? (record.executedYesterday ? 0xffc162 : 0x38ff9d) : MAP_PREMIUM.colors.selected);
-            const emissiveColor = record.elementType === 'kingpost'
-              ? getKingPostEmissiveColor(record)
-              : (isExecuted ? (record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : MAP_PREMIUM.colors.executedEmissive) : MAP_PREMIUM.colors.remainingEmissive);
-            mesh.material.color.setHex(selectedColor);
-            mesh.material.emissive = new THREE.Color(emissiveColor);
-            mesh.material.emissiveIntensity = record.elementType === 'kingpost' ? 0.92 : (record.executedYesterday ? 1.0 : 0.88);
-            mesh.material.opacity = 0.92;
-          } else {
-            mesh.material.color.setHex(record.color);
-            mesh.material.emissive = new THREE.Color(
-              record.elementType === 'kingpost'
-                ? getKingPostEmissiveColor(record)
-                : (record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : (record.executed ? MAP_PREMIUM.colors.executedEmissive : MAP_PREMIUM.colors.remainingEmissive))
-            );
-            mesh.material.emissiveIntensity = record.elementType === 'kingpost'
-              ? (record.stateKey === 'installed' ? 0.32 : (record.stateKey === 'ready' ? 0.48 : 0.16))
-              : (record.executedYesterday ? 0.62 : (record.executed ? 0.34 : 0.03));
-            mesh.material.opacity = getNormalOpacity(record);
-          }
-        });
+        this.syncPileOverlayMeshes();
         this.map.triggerRepaint();
       }
 
       setHoverPile(recordId) {
         if (this.hoveredId === recordId) return;
         this.hoveredId = recordId;
-        this.meshes.forEach(mesh => {
-          const record = mesh.userData.record;
-          const isSelected = record.id === this.highlightedId;
-          const isHovered = record.id === recordId && !isSelected;
-          if (isSelected) return;
-          if (isHovered) {
-            const hoverColor = record.elementType === 'kingpost'
-              ? (record.stateKey === 'installed' ? 0xaad4ff : (record.stateKey === 'ready' ? 0xffc979 : 0xf0d4a9))
-              : (record.executed ? (record.executedYesterday ? 0xffc162 : 0x36ff9c) : 0xffffff);
-            const hoverEmissive = record.elementType === 'kingpost'
-              ? getKingPostEmissiveColor(record)
-              : (record.executed ? (record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : MAP_PREMIUM.colors.executedEmissive) : MAP_PREMIUM.colors.remainingEmissive);
-            mesh.material.color.setHex(hoverColor);
-            mesh.material.emissive = new THREE.Color(hoverEmissive);
-            mesh.material.emissiveIntensity = record.elementType === 'kingpost' ? (record.stateKey === 'ready' ? 0.72 : 0.62) : (record.executedYesterday ? 0.86 : 0.58);
-            mesh.material.opacity = Math.min(0.94, getNormalOpacity(record) + 0.2);
-          } else {
-            mesh.material.color.setHex(record.color);
-            mesh.material.emissive = new THREE.Color(
-              record.elementType === 'kingpost'
-                ? getKingPostEmissiveColor(record)
-                : (record.executedYesterday ? MAP_PREMIUM.colors.yesterdayEmissive : (record.executed ? MAP_PREMIUM.colors.executedEmissive : MAP_PREMIUM.colors.remainingEmissive))
-            );
-            mesh.material.emissiveIntensity = record.elementType === 'kingpost'
-              ? (record.stateKey === 'installed' ? 0.32 : (record.stateKey === 'ready' ? 0.48 : 0.16))
-              : (record.executedYesterday ? 0.62 : (record.executed ? 0.34 : 0.03));
-            mesh.material.opacity = getNormalOpacity(record);
-          }
-        });
+        this.syncPileOverlayMeshes();
         this.map.triggerRepaint();
       }
 
@@ -2484,7 +2986,12 @@
         this.raycaster.setFromCamera(this.mouse, this.camera);
         const hits = this.raycaster.intersectObjects(this.meshes, false);
         if (!hits.length) return null;
-        return hits[0].object.userData.record || null;
+        const hit = hits[0];
+        if (hit.object?.isInstancedMesh) {
+          const records = Array.isArray(hit.object.userData.records) ? hit.object.userData.records : [];
+          if (Number.isInteger(hit.instanceId) && records[hit.instanceId]) return records[hit.instanceId];
+        }
+        return hit.object?.userData?.record || null;
       }
 
       projectLocalPointToScreen(localPoint) {
@@ -2502,7 +3009,7 @@
       pickByBody(point, maxDistancePx = 16) {
         let nearest = null;
         let nearestDistance = Infinity;
-        for (const record of [...pileRecords, ...kingPostRecords]) {
+        for (const record of getInteractionRecordsForCurrentView()) {
           if (!record._local3d) continue;
           const topZ = record._local3d.topZ || -0.02;
           const top = this.projectLocalPointToScreen(new THREE.Vector3(record._local3d.x, record._local3d.y, topZ));
@@ -2722,7 +3229,7 @@
 
     function getNearestMapElementRecordFromPoint(point, maxDistancePx = 30) {
       let nearest = null, nearestDistance = Infinity;
-      for (const record of [...pileRecords, ...kingPostRecords]) {
+      for (const record of getInteractionRecordsForCurrentView()) {
         const projected = map.project(record.lngLat);
         const dx = projected.x - point.x, dy = projected.y - point.y;
         const distance = Math.hypot(dx, dy);
@@ -2752,9 +3259,11 @@
     function addLabelLayer() {
       clearHtmlLabels();
       if (isMapInteracting) return;
-      [...pileRecords, ...kingPostRecords].forEach(record => {
+      const { records, showType } = getLabelRecordsForCurrentView();
+      records.forEach(record => {
         const wrap = document.createElement('div');
         wrap.className = 'pile-label-marker';
+        if (isSatellite) wrap.classList.add('satellite');
 
         const idEl = document.createElement('div');
         idEl.className = 'pile-label-id';
@@ -2762,7 +3271,7 @@
 
         const typeEl = document.createElement('div');
         typeEl.className = 'pile-label-type';
-        typeEl.textContent = record.elementType === 'kingpost'
+        typeEl.textContent = !showType || record.elementType === 'kingpost'
           ? ''
           : (record.row.pileType || '');
 
@@ -2808,29 +3317,34 @@
       map.setCenter(SITE_CENTER);
       if (!pileLayer) {
         pileLayer = new ThreePileLayer('threejs-piles');
+      } else {
+        pileLayer.buildPiles();
       }
       return true;
+    }
+
+    function ensureMapContentBootstrapped() {
+      if (map.loaded()) {
+        bootstrapMapContent();
+        return;
+      }
+      const runBootstrap = () => bootstrapMapContent();
+      map.once('load', runBootstrap);
+      map.once('style.load', runBootstrap);
+      map.once('idle', runBootstrap);
     }
 
     function bootstrapMapContent() {
       if (mapContentBootstrapped) return;
       mapContentBootstrapped = true;
-      applyProgressCollapsedState();
       applyChartCollapsedState();
       bindVisibilityControls();
       applyVisibilityCollapsedState();
       finalizeStyleLoad();
       map.once('idle', () => {
-        focusCurrentProject(false);
-        map.once('moveend', () => {
-          if (initialProjectZoomApplied) return;
-          initialProjectZoomApplied = true;
-          map.easeTo({
-            zoom: map.getZoom() + 0.18,
-            duration: 420,
-            essential: true
-          });
-        });
+        if (initialProjectZoomApplied) return;
+        initialProjectZoomApplied = true;
+        focusCurrentProject(true);
       });
     }
 
@@ -2847,10 +3361,11 @@
         return false;
       }
       sidePanel.classList.remove('open');
-      if (map.loaded()) {
-        bootstrapMapContent();
-      } else {
-        map.once('load', bootstrapMapContent);
+      ensureMapContentBootstrapped();
+      if (mapContentBootstrapped) {
+        rebuildOperationalMapLayers();
+        refreshPileAppearance();
+        addLabelLayer();
       }
       return true;
     }
@@ -2865,7 +3380,7 @@
     map.on('click', e => {
       const record = getPileRecordFromInteraction(e.point, 38);
       if (!record) return;
-      if (pileLayer) pileLayer.setHighlightedPile(record.id);
+      if (pileLayer) pileLayer.setHighlightedPile(record.recordKey || record.id);
       openMapElementPanel(record);
     });
 
@@ -2887,25 +3402,37 @@
     map.on('moveend', () => {
       isMapInteracting = false;
     });
-    map.on('mousemove', e => {
-      if (isMapInteracting) return;
-      if (hoverRaf) return;
-      const point = { x: e.point.x, y: e.point.y };
-      hoverRaf = requestAnimationFrame(() => {
-        hoverRaf = 0;
+    if (supportsHoverInput) {
+      map.on('mousemove', e => {
         if (isMapInteracting) return;
-        const record = getPileRecordFromInteraction(point, 26);
-        const nextId = record ? record.id : null;
-        if (nextId === lastHoverRecordId) return;
-        lastHoverRecordId = nextId;
-        if (pileLayer) pileLayer.setHoverPile(nextId);
-        map.getCanvas().style.cursor = record ? 'pointer' : '';
+        if (hoverRaf) return;
+        const point = { x: e.point.x, y: e.point.y };
+        hoverRaf = requestAnimationFrame(() => {
+          hoverRaf = 0;
+          if (isMapInteracting) return;
+          const record = getPileRecordFromInteraction(point, 26);
+          const nextId = record ? (record.recordKey || record.id) : null;
+          if (nextId === lastHoverRecordKey) return;
+          lastHoverRecordKey = nextId;
+          if (pileLayer) pileLayer.setHoverPile(nextId);
+          map.getCanvas().style.cursor = record ? 'pointer' : '';
+        });
       });
-    });
-    map.on('mouseleave', () => {
-      lastHoverRecordId = null;
-      if (pileLayer) pileLayer.setHoverPile(null);
+      map.on('mouseleave', () => {
+        lastHoverRecordKey = null;
+        if (pileLayer) pileLayer.setHoverPile(null);
+        map.getCanvas().style.cursor = '';
+      });
+    } else {
       map.getCanvas().style.cursor = '';
+      map.on('touchstart', () => {
+        lastHoverRecordKey = null;
+        if (pileLayer) pileLayer.setHoverPile(null);
+      });
+    }
+    map.on('zoomend', () => {
+      if (isMapInteracting) return;
+      addLabelLayer();
     });
     map.on('style.load', () => {
       syncSatelliteButtonUi();
@@ -2950,7 +3477,7 @@
               });
               return;
             }
-            if (allPiles.length) {
+          if (allPiles.length || allKingPosts.length) {
               pileRecords = buildPileRecords(allPiles);
               kingPostRecords = buildKingPostRecords(allKingPosts);
               chartData = aggregateDailyData(allPiles);
@@ -2959,9 +3486,11 @@
                 refreshPileAppearance();
                 addLabelLayer();
               }
+              renderProgressCard();
+              ensureProjectFocusLayers();
             }
             sidePanel.classList.remove('open');
-            setTimeout(() => focusCurrentProject(false), 40);
+            setTimeout(() => focusCurrentProject(true), 40);
           } catch (err) {}
           return;
         }

@@ -301,7 +301,7 @@
 
     function isAllProjectsValue(value) {
       const normalized = normalizeText(value).toLowerCase();
-      return !normalized || normalized === 'all';
+      return !normalized || normalized === 'all' || normalized === 'all projects';
     }
 
     function normalizeDateString(value) {
@@ -489,6 +489,7 @@
         type: normalizeText(row.type || row.Type),
         project: getCompanyProjectLabel(row.project || row.Project),
         projectRaw: normalizeText(row.project || row.Project),
+        contractor: normalizeText(row.contractor || row.Contractor),
         status: normalizeText(row.status || row.Status),
         plot: normalizeText(row.plot || row.Plot)
       };
@@ -1070,6 +1071,18 @@
       });
     }
 
+    function getPortfolioPileRows(project = 'All Projects') {
+      const rawProject = normalizeText(project || 'All Projects');
+      const targetProject = isAllProjectsValue(rawProject) ? '' : rawProject;
+      return rawRows.filter(row => !targetProject || normalizeText(row.project) === targetProject);
+    }
+
+    function getPortfolioKingPostRows(project = 'All Projects') {
+      const rawProject = normalizeText(project || 'All Projects');
+      const targetProject = isAllProjectsValue(rawProject) ? '' : rawProject;
+      return kingPostRows.filter(row => !targetProject || normalizeText(row.project) === targetProject);
+    }
+
     function hasPileActivity(project) {
       return getRowsForProject(project).length > 0;
     }
@@ -1306,40 +1319,40 @@
       });
     }
 
-    function formatPeriodLabel(dateKey) {
-      if (chartGranularity === 'day') return formatDateLabel(dateKey).replace(/\s/g, '');
-      if (chartGranularity === 'week') return getCW(dateKey).replace(' ', '');
+    function formatPeriodLabel(dateKey, granularity = chartGranularity) {
+      if (granularity === 'day') return formatDateLabel(dateKey).replace(/\s/g, '');
+      if (granularity === 'week') return getCW(dateKey).replace(' ', '');
       return new Date(dateKey + 'T00:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace(/\s/g, '');
     }
 
-    function periodTitle(dateKey) {
-      if (chartGranularity === 'day') return formatDateLabel(dateKey);
+    function periodTitle(dateKey, granularity = chartGranularity) {
+      if (granularity === 'day') return formatDateLabel(dateKey);
       if (chartGranularity === 'week') return getCW(dateKey) + ' ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ' + formatDateLabel(dateKey);
       return new Date(dateKey + 'T00:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
     }
 
-    function aggregateDailyMetrics(rows, metric) {
+    function aggregateDailyMetrics(rows, metric, granularity = chartGranularity) {
       const map = new Map();
       const executedRows = getExecutedRows(rows);
       const dates = executedRows.map(row => getOverviewDateKey(row)).filter(Boolean).sort();
       if (!dates.length) return [];
 
-      const firstKey = periodKey(dates[0], chartGranularity);
+      const firstKey = periodKey(dates[0], granularity);
       const rangeEndKey = overviewDateMode === 'calendar' ? todayKey() : previousDayKey();
-      const lastKey = periodKey(rangeEndKey, chartGranularity);
+      const lastKey = periodKey(rangeEndKey, granularity);
       let cursor = new Date(firstKey + 'T00:00:00Z');
       const end = new Date(lastKey + 'T00:00:00Z');
 
       while (cursor <= end) {
         const key = cursor.toISOString().slice(0, 10);
         map.set(key, { date: key, value: 0, executedCount: 0, items: [] });
-        cursor = incrementPeriod(cursor, chartGranularity);
+        cursor = incrementPeriod(cursor, granularity);
       }
 
       executedRows.forEach(row => {
         const date = getOverviewDateKey(row);
         if (!date) return;
-        const key = periodKey(date, chartGranularity);
+        const key = periodKey(date, granularity);
         if (!map.has(key)) return;
         const item = map.get(key);
         item.value += metricValueForRow(row, metric);
@@ -1350,28 +1363,28 @@
       return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
     }
 
-    function aggregateKingPostMetrics(rows, metric) {
+    function aggregateKingPostMetrics(rows, metric, granularity = chartGranularity) {
       const map = new Map();
       const metricRows = rows.filter(row => isKingPostMetricRow(row, metric));
       const dates = metricRows.map(row => getKingPostMetricDateKey(row, metric)).filter(Boolean).sort();
       if (!dates.length) return [];
 
-      const firstKey = periodKey(dates[0], chartGranularity);
+      const firstKey = periodKey(dates[0], granularity);
       const rangeEndKey = overviewDateMode === 'calendar' ? todayKey() : previousDayKey();
-      const lastKey = periodKey(rangeEndKey, chartGranularity);
+      const lastKey = periodKey(rangeEndKey, granularity);
       let cursor = new Date(firstKey + 'T00:00:00Z');
       const end = new Date(lastKey + 'T00:00:00Z');
 
       while (cursor <= end) {
         const key = cursor.toISOString().slice(0, 10);
         map.set(key, { date: key, value: 0, executedCount: 0, items: [] });
-        cursor = incrementPeriod(cursor, chartGranularity);
+        cursor = incrementPeriod(cursor, granularity);
       }
 
       metricRows.forEach(row => {
         const date = getKingPostMetricDateKey(row, metric);
         if (!date) return;
-        const key = periodKey(date, chartGranularity);
+        const key = periodKey(date, granularity);
         if (!map.has(key)) return;
         const item = map.get(key);
         item.value += metricValueForRow(row, metric);
@@ -1433,6 +1446,8 @@
       const avgPredrilled = avgPredrilledRaw > 0 ? Math.round(avgPredrilledRaw * 10) / 10 : 0;
       const avgLm = avgLmRaw > 0 ? Math.round(avgLmRaw * 10) / 10 : 0;
       const yesterdayInstalled = aggregateKingPostMetrics(rows, 'installed').find(x => x.date === previousDayKey())?.executedCount || 0;
+      const yesterdayPredrilled = aggregateKingPostMetrics(rows, 'predrilled').find(x => x.date === previousDayKey())?.executedCount || 0;
+      const yesterdayKpLm = aggregateKingPostMetrics(rows, 'lm').find(x => x.date === previousDayKey())?.value || 0;
       let etaDate = '';
       let etaMonths = null;
       const etaRate = avgInstalledRaw || avgPredrilledRaw;
@@ -1441,7 +1456,7 @@
         etaDate = addWorkingDays(todayKey(), workingDaysNeeded);
         etaMonths = monthsBetween(todayKey(), etaDate);
       }
-      return { total, completed, predrilled, remaining, activeRigs, avgInstalled, avgPredrilled, avgLm, progress, yesterdayInstalled, etaDate, etaMonths };
+      return { total, completed, predrilled, remaining, activeRigs, avgInstalled, avgPredrilled, avgLm, progress, yesterdayInstalled, yesterdayPredrilled, yesterdayKpLm, etaDate, etaMonths };
     }
 
     function lastCalendarDaysMetric(rows, metric, calendarDayCount = 7) {
@@ -1534,6 +1549,7 @@
       const avgLm = avgLmRaw > 0 ? Math.round(avgLmRaw * 10) / 10 : 0;
 
       const yesterdayExecuted = aggregateDailyMetrics(rows, 'piles').find(x => x.date === previousDayKey())?.executedCount || 0;
+      const yesterdayLm = aggregateDailyMetrics(rows, 'lm').find(x => x.date === previousDayKey())?.value || 0;
       const latestCasting = executedRows.map(r => normalizeDateString(r.castingDate)).filter(Boolean).sort().pop() || '';
       let activeRigs = getOverviewEquipmentRigCount(project);
       if (!activeRigs) {
@@ -1546,7 +1562,7 @@
         etaDate = addWorkingDays(todayKey(), workingDaysNeeded);
         etaMonths = monthsBetween(todayKey(), etaDate);
       }
-      return { total, completed, remaining, activeRigs, avgPiles, avgLm, progress, yesterdayExecuted, latestCasting, etaDate, etaMonths };
+      return { total, completed, remaining, activeRigs, avgPiles, avgLm, progress, yesterdayExecuted, yesterdayLm, latestCasting, etaDate, etaMonths };
     }
 
     function getCW(dateKey) {
@@ -1641,6 +1657,737 @@
       els.projectSelector.innerHTML = projects.map(project => `<option value="${project}" ${project === selectedProject ? 'selected' : ''}>${project}</option>`).join('');
     }
 
+    function getRecentPileLmTotal(project = 'All Projects', calendarDayCount = 7) {
+      const rows = getPortfolioPileRows(project);
+      const executedRows = getExecutedRows(rows).filter(r => getOverviewDateKey(r));
+      if (!executedRows.length) return 0;
+      const allDates = Array.from(new Set(executedRows.map(r => getOverviewDateKey(r)).filter(Boolean))).sort();
+      const latestDate = allDates[allDates.length - 1];
+      if (!latestDate) return 0;
+      const endDate = new Date(`${latestDate}T00:00:00Z`);
+      const startDate = new Date(endDate);
+      startDate.setUTCDate(endDate.getUTCDate() - (calendarDayCount - 1));
+      const startKey = startDate.toISOString().slice(0, 10);
+      return executedRows
+        .filter(row => {
+          const dateKey = getOverviewDateKey(row);
+          return dateKey && dateKey >= startKey && dateKey <= latestDate;
+        })
+        .reduce((sum, row) => sum + (Number(row.asbuilt_depth) || Number(row.design_depth) || 0), 0);
+    }
+
+    function getExecutiveLatestManpowerSummary(project = 'All Projects') {
+      const rows = getPortfolioManpowerRows(project);
+      const latest = rows[0] || null;
+      if (!latest) {
+        return { total: 0, leadership: 0, operators: 0, support: 0, date: '' };
+      }
+      const leadership = (latest.pm || 0) + (latest.se || 0) + (latest.foreman || 0);
+      const operators = (latest.op || 0) + (latest.vb || 0) + (latest.rig || 0);
+      const support = (latest.we || 0) + (latest.me || 0) + (latest.hl || 0);
+      return { total: latest.total || 0, leadership, operators, support, date: latest.date || '' };
+    }
+
+    function getExecutiveEquipmentSummary(project = 'All Projects') {
+      const latestRows = getPortfolioEquipmentDateRows(project);
+      const latest = latestRows[latestRows.length - 1] || null;
+      const piles = getPortfolioPileRows(project);
+      const stats = computeStats(piles, project);
+      const lm7d = getRecentPileLmTotal(project, 7);
+      const targetProjectToken = isAllProjectsValue(project || 'All Projects') ? '' : getCompanyProjectToken(project);
+      const registryRigItems = equipmentRegistryRows
+        .map(sanitizeEquipmentRegistryRow)
+        .filter(item => normalizeText(item.type).toLowerCase() === 'rig')
+        .filter(item => normalizeText(item.status).toLowerCase() === 'active')
+        .filter(item => !targetProjectToken || getCompanyProjectToken(item.projectRaw || item.project) === targetProjectToken);
+      const ownedRigs = registryRigItems.filter(item => normalizeText(item.contractor).toLowerCase() === 'apfc').length;
+      const rentedRigs = registryRigItems.filter(item => normalizeText(item.contractor).toLowerCase() === 'rental').length;
+      const rigCount = ownedRigs + rentedRigs || latest?.rigs || stats.activeRigs || 0;
+      const lmPerRigPerDay = rigCount > 0 ? (stats.avgLm / rigCount) : 0;
+      return {
+        rigs: latest?.rigs || 0,
+        ownedRigs,
+        rentedRigs,
+        cranes: latest?.cranes || 0,
+        others: latest?.others || 0,
+        lm7d,
+        lmPerRigPerDay,
+        date: latest?.date || ''
+      };
+    }
+
+    function getExecutivePileCostPerLm(project = 'All Projects') {
+      const manpower = getPortfolioManpowerRows(project);
+      const pileRows = getPortfolioPileRows(project);
+      const cumulativeLm = getExecutedRows(pileRows).reduce((sum, row) => sum + (Number(row.asbuilt_depth) || Number(row.design_depth) || 0), 0);
+      if (!manpower.length || cumulativeLm <= 0) return 0;
+
+      const dailyRates = {
+        pm: 461.5,
+        se: 461.5,
+        foreman: 343.4,
+        op: 247.8,
+        vb: 101,
+        rig: 108.2,
+        we: 151.4,
+        me: 315.5,
+        hl: 101
+      };
+      const overheadsDaily = 2540;
+      const rigRental = 2500;
+      const vbRental = 3250;
+      const craneRental = 1100;
+
+      const equipmentByDate = new Map();
+      getPortfolioEquipmentDateRows(project).forEach(row => equipmentByDate.set(row.date, row));
+
+      const totalCost = manpower.reduce((sum, row) => {
+        const salaries =
+          (row.pm || 0) * dailyRates.pm +
+          (row.se || 0) * dailyRates.se +
+          (row.foreman || 0) * dailyRates.foreman +
+          (row.op || 0) * dailyRates.op +
+          (row.vb || 0) * dailyRates.vb +
+          (row.rig || 0) * dailyRates.rig +
+          (row.we || 0) * dailyRates.we +
+          (row.me || 0) * dailyRates.me +
+          (row.hl || 0) * dailyRates.hl;
+        const equipment = equipmentByDate.get(row.date);
+        const vibratorCount = Array.isArray(equipment?.activeItems)
+          ? equipment.activeItems.filter(item => normalizeText(item.type).toLowerCase() === 'vibrator').length
+          : 0;
+        const rental = (equipment?.rigs || 0) * rigRental + (equipment?.cranes || 0) * craneRental + vibratorCount * vbRental;
+        return sum + salaries + rental + overheadsDaily;
+      }, 0);
+
+      return totalCost / cumulativeLm;
+    }
+
+    function buildExecutiveProjectSnapshot(project) {
+      const pileRows = getPortfolioPileRows(project);
+      const kingRows = getPortfolioKingPostRows(project);
+      const pileStats = computeStats(pileRows, project);
+      const kingStats = computeKingPostStats(kingRows);
+      const manpower = getExecutiveLatestManpowerSummary(project);
+      const equipment = getExecutiveEquipmentSummary(project);
+      const activeRigNames = new Set([
+        ...getExecutedRows(pileRows).map(row => normalizeText(row.machine)).filter(Boolean),
+        ...kingRows.map(row => normalizeText(row.rig1)).filter(Boolean)
+      ]);
+      const equipmentRigCount = (equipment.ownedRigs || 0) + (equipment.rentedRigs || 0);
+      const activeRigs = equipmentRigCount || Math.max(activeRigNames.size, equipment.rigs, pileStats.activeRigs, kingStats.activeRigs);
+      return {
+        project,
+        pileStats,
+        kingStats,
+        manpower,
+        equipment,
+        activeRigs,
+        costPerLm: getExecutivePileCostPerLm(project)
+      };
+    }
+
+    function renderExecutiveMatrix(snapshots) {
+      if (!els.executiveMatrixBody) return;
+
+      function activityBlock(type, heading, content) {
+        return `
+          <div class="exec-act-block exec-act-block--${type}">
+            <div class="exec-act-head">
+              <div class="exec-act-title exec-act-title--${type}">${heading}</div>
+            </div>
+            ${content}
+          </div>
+        `;
+      }
+
+      const rows = snapshots.map(snapshot => {
+        const hasPiles = snapshot.pileStats.total > 0;
+        const hasKing = snapshot.kingStats.total > 0;
+
+        // Progress column
+        let progressCell = '';
+        if (hasPiles) {
+          const pct = Math.min(100, Math.max(0, snapshot.pileStats.progress));
+          progressCell += activityBlock('piles', 'Bored Piles', `
+            <div class="exec-progress-line">
+              <div class="exec-progress-nums"><span class="exec-executed">${snapshot.pileStats.completed}</span><span class="exec-slash">/</span><span class="exec-total">${snapshot.pileStats.total}</span></div>
+              <span class="exec-progress-pct">${pct.toFixed(1)}%</span>
+            </div>
+            <div class="exec-progress-track"><div class="exec-progress-fill exec-progress-fill--piles" style="width:${pct}%"></div></div>
+          `);
+        }
+        if (hasKing) {
+          const displayCompleted = snapshot.kingStats.completed > 0 ? snapshot.kingStats.completed : snapshot.kingStats.predrilled;
+          const progressLabel = snapshot.kingStats.completed > 0 ? 'Installed' : 'Pre-Drilled';
+          const displayPct = snapshot.kingStats.total > 0 ? (displayCompleted / snapshot.kingStats.total) * 100 : 0;
+          const pct = Math.min(100, Math.max(0, displayPct));
+          progressCell += activityBlock('king', 'KingPosts', `
+            <div class="exec-kv" style="margin-bottom:8px;"><span class="exec-kv-unit">${progressLabel}</span></div>
+            <div class="exec-progress-line">
+              <div class="exec-progress-nums"><span class="exec-executed">${displayCompleted}</span><span class="exec-slash">/</span><span class="exec-total">${snapshot.kingStats.total}</span></div>
+              <span class="exec-progress-pct">${pct.toFixed(1)}%</span>
+            </div>
+            <div class="exec-progress-track"><div class="exec-progress-fill exec-progress-fill--king" style="width:${pct}%"></div></div>
+          `);
+        }
+
+        // Yesterday column
+        let yesterdayCell = '';
+        if (hasPiles) {
+          const cnt = snapshot.pileStats.yesterdayExecuted;
+          const lm = snapshot.pileStats.yesterdayLm;
+          yesterdayCell += activityBlock('piles', 'Bored Piles', `<div class="exec-kv"><span class="exec-kv-num">${cnt}</span><span class="exec-kv-unit">Pile</span><span class="exec-kv-sep">|</span><span class="exec-kv-num">${lm > 0 ? lm.toFixed(1) : '-'}</span><span class="exec-kv-unit">Lm</span></div>`);
+        }
+        if (hasKing) {
+          const cnt = snapshot.kingStats.yesterdayInstalled > 0
+            ? snapshot.kingStats.yesterdayInstalled
+            : snapshot.kingStats.yesterdayPredrilled;
+          const lm = snapshot.kingStats.yesterdayKpLm;
+          yesterdayCell += activityBlock('king', 'KingPosts', `<div class="exec-kv"><span class="exec-kv-num">${cnt}</span><span class="exec-kv-unit">Kingpost</span><span class="exec-kv-sep">|</span><span class="exec-kv-num">${lm > 0 ? lm.toFixed(1) : '-'}</span><span class="exec-kv-unit">Lm</span></div>`);
+        }
+
+        // Rolling AVG 7CD column
+        let avgCell = '';
+        if (hasPiles) {
+          avgCell += activityBlock('piles', 'Bored Piles', `<div class="exec-kv"><span class="exec-kv-num">${snapshot.pileStats.avgPiles.toFixed(1)}</span><span class="exec-kv-unit">Pile/CD</span><span class="exec-kv-sep">|</span><span class="exec-kv-num">${snapshot.pileStats.avgLm.toFixed(1)}</span><span class="exec-kv-unit">Lm/CD</span></div>`);
+        }
+        if (hasKing) {
+          const kpAvg = snapshot.kingStats.avgInstalled > 0 ? snapshot.kingStats.avgInstalled : snapshot.kingStats.avgPredrilled;
+          avgCell += activityBlock('king', 'KingPosts', `<div class="exec-kv"><span class="exec-kv-num">${kpAvg.toFixed(1)}</span><span class="exec-kv-unit">Kingpost/CD</span><span class="exec-kv-sep">|</span><span class="exec-kv-num">${snapshot.kingStats.avgLm.toFixed(1)}</span><span class="exec-kv-unit">Lm/CD</span></div>`);
+        }
+
+        // ETA column
+        let etaCell = '';
+        if (hasPiles) {
+          const pileEtaDate = snapshot.pileStats.etaDate ? formatDateFullLabel(snapshot.pileStats.etaDate) : '-';
+          const pileEtaMonths = snapshot.pileStats.etaMonths != null ? `${snapshot.pileStats.etaMonths.toFixed(1)} months remaining` : '';
+          etaCell += activityBlock('piles', 'Bored Piles', `<div class="exec-eta-date">${escapeHtml(pileEtaDate)}</div>${pileEtaMonths ? `<div class="exec-eta-months">${pileEtaMonths}</div>` : ''}`);
+        }
+        if (hasKing) {
+          const kingEtaDate = snapshot.kingStats.etaDate ? formatDateFullLabel(snapshot.kingStats.etaDate) : '-';
+          const kingEtaMonths = snapshot.kingStats.etaMonths != null ? `${snapshot.kingStats.etaMonths.toFixed(1)} months remaining` : '';
+          etaCell += activityBlock('king', 'KingPosts', `<div class="exec-eta-date">${escapeHtml(kingEtaDate)}</div>${kingEtaMonths ? `<div class="exec-eta-months">${kingEtaMonths}</div>` : ''}`);
+        }
+
+        return `
+          <tr>
+            <td><div class="executive-project-name">${escapeHtml(snapshot.project)}</div></td>
+            <td><div class="exec-act-stack">${progressCell}</div></td>
+            <td><div class="exec-act-stack">${yesterdayCell}</div></td>
+            <td><div class="exec-act-stack">${avgCell}</div></td>
+            <td><div class="exec-act-stack">${etaCell}</div></td>
+            <td class="exec-scalar-cell">${snapshot.activeRigs}<span class="exec-unit"><br>${snapshot.equipment.ownedRigs} Owned | ${snapshot.equipment.rentedRigs} Rented</span></td>
+            <td class="exec-scalar-cell">${snapshot.manpower.total}</td>
+            <td class="exec-scalar-cell">${snapshot.costPerLm > 0 ? `${snapshot.costPerLm.toFixed(0)}<span class="exec-unit"> AED/Lm</span>` : '-'}</td>
+          </tr>
+        `;
+      }).join('');
+      els.executiveMatrixBody.innerHTML = rows || `<tr><td colspan="8" style="padding:20px;color:var(--muted);">No executive data available.</td></tr>`;
+    }
+
+    function renderExecutiveProgressBars(snapshots) {
+      if (!els.executiveProgressBars) return;
+      els.executiveProgressBars.innerHTML = snapshots.map(snapshot => {
+        return `
+          <div class="executive-progress-item">
+            <div class="executive-progress-head">
+              <div class="executive-progress-label">${escapeHtml(snapshot.project)}</div>
+              <div class="executive-progress-meta">Piles ${snapshot.pileStats.progress.toFixed(1)}% | KingPosts ${snapshot.kingStats.progress.toFixed(1)}%</div>
+            </div>
+            <div class="executive-progress-track">
+              <span class="executive-progress-fill-piles" style="width:${Math.max(0, Math.min(100, snapshot.pileStats.progress))}%"></span>
+              <span class="executive-progress-fill-kingposts" style="width:${Math.max(0, Math.min(100, snapshot.kingStats.progress))}%"></span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function getExecutiveAvailableActivities(project = executiveTrendProject) {
+      const activities = [];
+      if (getPortfolioPileRows(project).length > 0) activities.push('piles');
+      if (getPortfolioKingPostRows(project).length > 0) activities.push('kingposts');
+      return activities;
+    }
+
+    function syncExecutiveActivityMode(project = executiveTrendProject) {
+      const available = getExecutiveAvailableActivities(project);
+      if (!available.length) {
+        executiveActivityMode = 'piles';
+      } else if (!available.includes(executiveActivityMode)) {
+        executiveActivityMode = available[0];
+      }
+
+      const showToggle = available.length > 1;
+      const activityToggle = document.getElementById('executiveTrendActivityToggle');
+      if (activityToggle) {
+        activityToggle.hidden = !showToggle;
+        activityToggle.style.display = showToggle ? '' : 'none';
+      }
+
+      els.executiveActivityButtons.forEach(btn => {
+        const mode = btn.dataset.executiveActivity;
+        const visible = available.includes(mode);
+        btn.hidden = !visible;
+        btn.style.display = visible ? '' : 'none';
+        btn.classList.toggle('active', mode === executiveActivityMode);
+      });
+    }
+
+    function getExecutiveMetricConfig() {
+      if (executiveActivityMode === 'kingposts') {
+        return [
+          { key: 'predrilled', label: 'Pre-Drilled', unit: 'kp' },
+          { key: 'installed', label: 'Installed', unit: 'kp' },
+          { key: 'lm', label: 'Lm', unit: 'Lm' }
+        ];
+      }
+      return [
+        { key: 'piles', label: 'Piles', unit: 'piles' },
+        { key: 'lm', label: 'Lm', unit: 'Lm' },
+        { key: 'm3', label: 'm3', unit: 'm3' }
+      ];
+    }
+
+    function syncExecutiveMetricButtons() {
+      const config = getExecutiveMetricConfig();
+      const validKeys = config.map(c => c.key);
+      if (!validKeys.includes(executiveChartMetric)) executiveChartMetric = config[0]?.key || 'piles';
+      els.executiveMetricButtons.forEach((btn, idx) => {
+        const item = config[idx];
+        if (!item) { btn.hidden = true; btn.style.display = 'none'; return; }
+        btn.hidden = false;
+        btn.style.display = '';
+        btn.dataset.executiveMetric = item.key;
+        btn.textContent = item.label;
+        btn.classList.toggle('active', item.key === executiveChartMetric);
+      });
+    }
+
+    function syncExecutiveModeToggleUI() {
+      if (!els.executiveModeToggle) return;
+      const isCumulative = executiveChartMode === 'cumulative';
+      els.executiveModeToggle.classList.toggle('on', isCumulative);
+      els.executiveModeToggle.setAttribute('aria-pressed', isCumulative ? 'true' : 'false');
+      const label = document.getElementById('executiveModeLabelCumulative');
+      if (label) label.classList.toggle('active', isCumulative);
+    }
+
+    function buildExecutiveTrendDataset(rows) {
+      const gran = executiveChartGranularity;
+      const metric = executiveChartMetric;
+      const mode = executiveChartMode;
+      if (executiveActivityMode === 'kingposts') {
+        const daily = aggregateKingPostMetrics(rows, metric, gran);
+        let cumulative = 0;
+        return daily.map(item => {
+          cumulative += item.value;
+          return { date: item.date, value: mode === 'daily' ? item.value : cumulative, dayValue: item.value, executedCount: item.executedCount, items: item.items, cumulative };
+        });
+      }
+      const daily = aggregateDailyMetrics(rows, metric, gran);
+      let cumulative = 0;
+      return daily.map(item => {
+        cumulative += item.value;
+        return { date: item.date, value: mode === 'daily' ? item.value : cumulative, dayValue: item.value, executedCount: item.executedCount, items: item.items, cumulative };
+      });
+    }
+
+    function hasUsableExecutiveTrendData(data) {
+      return Array.isArray(data) && data.some(item => Number(item?.value || 0) > 0 || Number(item?.dayValue || 0) > 0);
+    }
+
+    function showExecutiveTrendTooltip(evt, dataPoint, plannedPoint, options = {}) {
+      const wrap = els.executiveTrendWrap;
+      const tooltip = els.executiveTrendTooltip;
+      if (!wrap || !tooltip) return;
+      const gran = executiveChartGranularity;
+      const metric = executiveChartMetric;
+      const mode = executiveChartMode;
+      const actMode = executiveActivityMode;
+      let html = `<div class="tooltip-title">${periodTitle(dataPoint.date, gran)}</div>`;
+      if (mode === 'daily') {
+        if (actMode === 'kingposts') {
+          const label = metric === 'predrilled' ? 'Pre-Drilled' : metric === 'installed' ? 'Beam Installed' : 'Drilled Lm';
+          const unit = metric === 'lm' ? ' Lm' : '';
+          html += `<div class="tooltip-row"><span>${label}</span><strong>${Number(dataPoint.value.toFixed(1)).toLocaleString()}${unit}</strong></div>`;
+          if (gran === 'day' && dataPoint.items.length) {
+            html += `<div class="tooltip-list">${dataPoint.items.map(item => `<div class="tooltip-list-item"><span>${item.id || '-'}</span><span>${item.status || item.machine || '-'}</span></div>`).join('')}</div>`;
+          } else {
+            html += `<div class="tooltip-row"><span>Elements</span><strong>${dataPoint.executedCount}</strong></div>`;
+          }
+        } else if (metric === 'piles') {
+          html += `<div class="tooltip-row"><span>Piles Executed</span><strong>${dataPoint.executedCount}</strong></div>`;
+          if (gran === 'day' && dataPoint.items.length) {
+            html += `<div class="tooltip-list">${dataPoint.items.map(item => `<div class="tooltip-list-item"><span>${item.id || '-'}</span><span>${item.machine || '-'}</span></div>`).join('')}</div>`;
+          }
+        } else {
+          const unit = metric === 'lm' ? ' Lm' : ' m3';
+          html += `<div class="tooltip-row"><span>${metric === 'lm' ? 'Lm' : 'm3'}</span><strong>${Number(dataPoint.value.toFixed(1)).toLocaleString()}${unit}</strong></div>`;
+          html += `<div class="tooltip-row"><span>Piles Executed</span><strong>${dataPoint.executedCount}</strong></div>`;
+        }
+      } else {
+        const unit = metric === 'piles' ? ' piles' : metric === 'lm' ? ' Lm' : metric === 'm3' ? ' m3' : '';
+        const executedLabel = actMode === 'kingposts' ? 'This ' + (gran === 'day' ? 'Date' : 'Period') : 'Executed This ' + (gran === 'day' ? 'Date' : 'Period');
+        html += `<div class="tooltip-row"><span>${executedLabel}</span><strong>${Number(dataPoint.dayValue.toFixed(1)).toLocaleString()}${unit}</strong></div>`;
+        html += `<div class="tooltip-row"><span>Cumulative</span><strong>${Number(dataPoint.value.toFixed(1)).toLocaleString()}${unit}</strong></div>`;
+      }
+      tooltip.innerHTML = html;
+      tooltip.classList.add('visible');
+      wrap.appendChild(tooltip);
+      const tooltipHeight = mode === 'daily' && metric === 'piles' ? 190 : 150;
+      const anchorX = Number(options.anchorX || 0);
+      const anchorY = Number(options.anchorY || 0);
+      placeTooltipInScrollWrap(tooltip, wrap, anchorX, anchorY, 280, tooltipHeight);
+      if (executiveChartHoverGuide && options.showGuide) {
+        executiveChartHoverGuide.setAttribute('x1', anchorX);
+        executiveChartHoverGuide.setAttribute('x2', anchorX);
+        executiveChartHoverGuide.style.display = 'block';
+      }
+    }
+
+    function hideExecutiveTrendTooltip() {
+      const tooltip = els.executiveTrendTooltip;
+      if (!tooltip) return;
+      tooltip.classList.remove('visible');
+      tooltip.style.position = '';
+      tooltip.style.left = '';
+      tooltip.style.top = '';
+      tooltip.innerHTML = '';
+      if (executiveChartHoverGuide) executiveChartHoverGuide.style.display = 'none';
+    }
+
+    function renderExecutiveTrendChart() {
+      const project = executiveTrendProject;
+      syncExecutiveActivityMode(project);
+      let rows = executiveActivityMode === 'kingposts'
+        ? getPortfolioKingPostRows(project)
+        : getPortfolioPileRows(project);
+      let data = buildExecutiveTrendDataset(rows);
+      const gran = executiveChartGranularity;
+      const mode = executiveChartMode;
+
+      syncExecutiveMetricButtons();
+      syncExecutiveModeToggleUI();
+
+      if (!hasUsableExecutiveTrendData(data)) {
+        const metricOptions = getExecutiveMetricConfig().map(item => item.key);
+        for (const candidate of metricOptions) {
+          if (candidate === executiveChartMetric) continue;
+          executiveChartMetric = candidate;
+          syncExecutiveMetricButtons();
+          data = buildExecutiveTrendDataset(rows);
+          if (hasUsableExecutiveTrendData(data)) break;
+        }
+      }
+
+      if (!hasUsableExecutiveTrendData(data)) {
+        const fallbackActivity = executiveActivityMode === 'kingposts' ? 'piles' : 'kingposts';
+        if (getExecutiveAvailableActivities(project).includes(fallbackActivity)) {
+          executiveActivityMode = fallbackActivity;
+          syncExecutiveActivityMode(project);
+          syncExecutiveMetricButtons();
+          rows = executiveActivityMode === 'kingposts'
+            ? getPortfolioKingPostRows(project)
+            : getPortfolioPileRows(project);
+          data = buildExecutiveTrendDataset(rows);
+          if (!hasUsableExecutiveTrendData(data)) {
+            const metricOptions = getExecutiveMetricConfig().map(item => item.key);
+            for (const candidate of metricOptions) {
+              if (candidate === executiveChartMetric) continue;
+              executiveChartMetric = candidate;
+              syncExecutiveMetricButtons();
+              data = buildExecutiveTrendDataset(rows);
+              if (hasUsableExecutiveTrendData(data)) break;
+            }
+          }
+        }
+      }
+
+      const metric = executiveChartMetric;
+      const actMode = executiveActivityMode;
+      const titleMetric = getExecutiveMetricConfig().find(c => c.key === metric)?.label || metric;
+      const granLabel = gran === 'day' ? 'Day' : gran === 'week' ? 'Week' : 'Month';
+      const showLegend = mode === 'cumulative' && metric === 'piles' && actMode === 'piles';
+      const scopedProjectCount = project === 'All Projects'
+        ? (executiveActivityMode === 'kingposts'
+          ? Array.from(new Set(getPortfolioKingPostRows(project).map(row => normalizeText(row.project)).filter(Boolean))).length
+          : Array.from(new Set(getPortfolioPileRows(project).map(row => normalizeText(row.project)).filter(Boolean))).length)
+        : 1;
+      if (els.executiveTrendSeriesLegend) els.executiveTrendSeriesLegend.hidden = !showLegend;
+      if (els.executiveTrendTitle) els.executiveTrendTitle.textContent = `${mode === 'daily' ? 'Daily' : 'Cumulative'} ${titleMetric} by ${granLabel}`;
+      if (els.executiveTrendTag) els.executiveTrendTag.textContent = mode === 'daily' ? 'Daily' : 'Cumulative';
+      if (els.executiveTrendSubtitle) {
+        els.executiveTrendSubtitle.textContent = project === 'All Projects'
+          ? `${scopedProjectCount} projects with ${executiveActivityMode === 'kingposts' ? 'KingPost' : 'Bored Pile'} activity`
+          : `${project} production output`;
+      }
+
+      clearSvgGroup(els.executiveTrendGrid);
+      clearSvgGroup(els.executiveTrendSeries);
+      clearSvgGroup(els.executiveTrendLabels);
+      clearSvgGroup(els.executiveTrendXAxis);
+
+      if (!hasUsableExecutiveTrendData(data)) {
+        const empty = svgEl('text', { x: '500', y: '160', 'text-anchor': 'middle', fill: 'rgba(244,247,251,0.62)', 'font-size': '16', 'font-weight': '700' });
+        empty.textContent = 'No production data available';
+        els.executiveTrendSeries.appendChild(empty);
+        return;
+      }
+
+      const wrap = els.executiveTrendWrap;
+      const visiblePoints = 14;
+      const wrapWidth = wrap?.clientWidth || 920;
+      const wrapHeight = wrap?.clientHeight || 360;
+      const width = Math.max(Math.round(wrapWidth), 520);
+      const height = Math.max(Math.round(wrapHeight), 320);
+      const left = 58;
+      const right = 20;
+      const top = 20;
+      const bottom = 56;
+      const innerH = height - top - bottom;
+      const visibleInnerW = width - left - right;
+      const scrollNeeded = data.length > visiblePoints;
+      const stepX = scrollNeeded ? visibleInnerW / visiblePoints : visibleInnerW / Math.max(data.length, 1);
+      const innerW = scrollNeeded ? stepX * data.length : visibleInnerW;
+      const svgWidth = left + innerW + right;
+      const maxVal = Math.max(1, ...data.map(d => d.value));
+      const barW = Math.min(34, Math.max(16, stepX * 0.52));
+
+      els.executiveTrendSvg.setAttribute('viewBox', `0 0 ${svgWidth} ${height}`);
+      els.executiveTrendSvg.setAttribute('width', svgWidth);
+      els.executiveTrendSvg.setAttribute('height', height);
+      els.executiveTrendSvg.style.width = scrollNeeded ? `${svgWidth}px` : '100%';
+      els.executiveTrendSvg.style.minWidth = scrollNeeded ? `${svgWidth}px` : '100%';
+      els.executiveTrendSvg.style.height = '100%';
+
+      executiveChartHoverGuide = null;
+      if (mode === 'cumulative') {
+        executiveChartHoverGuide = svgEl('line', {
+          x1: left, y1: top, x2: left, y2: top + innerH,
+          stroke: 'rgba(255,255,255,0.55)', 'stroke-width': '1.5', 'stroke-dasharray': '6 6',
+          style: 'display:none; pointer-events:none;'
+        });
+        els.executiveTrendSeries.appendChild(executiveChartHoverGuide);
+      }
+
+      for (let i = 0; i < 5; i += 1) {
+        const y = top + (innerH / 4) * i;
+        els.executiveTrendGrid.appendChild(svgEl('line', { x1: left, y1: y, x2: svgWidth - right, y2: y, stroke: 'rgba(255,255,255,0.06)', 'stroke-width': '1' }));
+      }
+
+      const gradId = actMode === 'kingposts' ? 'executiveBarGradientKing' : 'executiveBarGradient';
+
+      if (mode === 'daily') {
+        const animatedBars = [];
+        data.forEach((d, idx) => {
+          const x = left + stepX * idx + stepX / 2;
+          const h = (d.value / maxVal) * (innerH - 8);
+          const y = top + innerH - h;
+          const bar = svgEl('rect', { x: x - barW / 2, y: top + innerH, width: barW, height: 0, rx: 8, style: `fill: url(#${gradId})`, class: 'bar-shape' });
+          els.executiveTrendSeries.appendChild(bar);
+          const lbl = svgEl('text', { x, y: y - 8, class: 'bar-label', style: 'opacity:0; transition:opacity 180ms ease;' });
+          lbl.textContent = metric === 'piles' || metric === 'installed' || metric === 'predrilled' ? d.executedCount : Number(d.value.toFixed(1)).toString();
+          els.executiveTrendLabels.appendChild(lbl);
+          animatedBars.push({ bar, lbl, finalY: y, finalH: h, idx });
+          const hit = svgEl('rect', { x: x - barW / 2, y, width: barW, height: h, class: 'hover-target' });
+          hit.addEventListener('mousemove', () => showExecutiveTrendTooltip(null, d, null, { anchorX: x, anchorY: y }));
+          hit.addEventListener('mouseleave', hideExecutiveTrendTooltip);
+          els.executiveTrendSeries.appendChild(hit);
+          const xLabel = svgEl('text', { x, y: height - 18, class: 'axis-label', 'text-anchor': 'middle' });
+          xLabel.textContent = formatPeriodLabel(d.date, gran);
+          els.executiveTrendXAxis.appendChild(xLabel);
+        });
+        const startTime = performance.now();
+        const duration = 520;
+        const stagger = 26;
+        const easeOut = t => 1 - Math.pow(1 - t, 3);
+        const frame = now => {
+          let running = false;
+          animatedBars.forEach(item => {
+            const local = Math.min(Math.max((now - startTime - item.idx * stagger) / duration, 0), 1);
+            const eased = easeOut(local);
+            if (local < 1) running = true;
+            const h = item.finalH * eased;
+            item.bar.setAttribute('y', (top + innerH) - h);
+            item.bar.setAttribute('height', h);
+            item.lbl.style.opacity = local > 0.82 ? '1' : '0';
+          });
+          if (running) requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      } else {
+        const isKingMode = actMode === 'kingposts';
+        let path = '';
+        let area = `M ${left} ${top + innerH}`;
+        data.forEach((d, idx) => {
+          const x = left + stepX * idx + stepX / 2;
+          const y = top + innerH - (d.value / maxVal) * (innerH - 10);
+          path += `${idx === 0 ? 'M' : 'L'} ${x} ${y} `;
+          area += ` L ${x} ${y}`;
+          els.executiveTrendSeries.appendChild(svgEl('circle', { cx: x, cy: y, r: 5.5, class: 'point-dot', style: isKingMode ? 'fill:rgba(96,165,250,1)' : '' }));
+          const lbl = svgEl('text', { x, y: y - 10, class: 'point-label' });
+          lbl.textContent = metric === 'piles' || metric === 'installed' || metric === 'predrilled' ? Math.round(d.value).toString() : Number(d.value.toFixed(1)).toString();
+          els.executiveTrendLabels.appendChild(lbl);
+          const hit = svgEl('rect', { x: x - stepX / 2, y: top, width: stepX, height: innerH + bottom, class: 'hover-target' });
+          hit.addEventListener('mousemove', () => showExecutiveTrendTooltip(null, d, null, { anchorX: x, anchorY: y, showGuide: true }));
+          hit.addEventListener('mouseleave', hideExecutiveTrendTooltip);
+          els.executiveTrendSeries.appendChild(hit);
+          const xLabel = svgEl('text', { x, y: height - 18, class: 'axis-label', 'text-anchor': 'middle' });
+          xLabel.textContent = formatPeriodLabel(d.date, gran);
+          els.executiveTrendXAxis.appendChild(xLabel);
+        });
+        const lastX = left + stepX * (data.length - 1) + stepX / 2;
+        area += ` L ${lastX} ${top + innerH} Z`;
+        const lineColor = isKingMode ? 'rgba(96,165,250,0.95)' : 'rgba(142,240,191,0.95)';
+        const areaColor = isKingMode ? 'rgba(96,165,250,0.12)' : 'rgba(142,240,191,0.12)';
+        const glowColor = isKingMode ? 'rgba(96,165,250,0.18)' : 'rgba(110,231,183,0.18)';
+        const areaEl = svgEl('path', { d: area, class: 'area-shape', style: `fill:${areaColor}; opacity:0; transition:opacity 260ms ease;` });
+        els.executiveTrendSeries.appendChild(areaEl);
+        const lineEl = svgEl('path', { d: path.trim(), class: 'line-shape', style: `stroke:${lineColor}; filter:drop-shadow(0 0 8px ${glowColor});` });
+        els.executiveTrendSeries.appendChild(lineEl);
+        requestAnimationFrame(() => {
+          areaEl.style.opacity = '1';
+          const length = lineEl.getTotalLength();
+          lineEl.style.strokeDasharray = `${length}`;
+          lineEl.style.strokeDashoffset = `${length}`;
+          lineEl.style.transition = 'stroke-dashoffset 700ms cubic-bezier(.22,.61,.36,1)';
+          requestAnimationFrame(() => { lineEl.style.strokeDashoffset = '0'; });
+          Array.from(els.executiveTrendLabels.children).forEach((label, idx) => {
+            label.style.opacity = '0';
+            label.style.transition = 'opacity 180ms ease';
+            setTimeout(() => { label.style.opacity = '1'; }, 280 + idx * 18);
+          });
+          Array.from(els.executiveTrendSeries.querySelectorAll('.point-dot')).forEach((dot, idx) => {
+            dot.style.opacity = '0';
+            dot.style.transition = 'opacity 180ms ease';
+            setTimeout(() => { dot.style.opacity = '1'; }, 260 + idx * 18);
+          });
+        });
+      }
+
+      if (wrap && !wrap.dataset.execInteractiveBound) {
+        let isDown = false;
+        let startX = 0;
+        let startScrollLeft = 0;
+        wrap.addEventListener('click', evt => { if (!evt.target.closest('.hover-target')) hideExecutiveTrendTooltip(); });
+        wrap.addEventListener('pointerdown', evt => {
+          if ((wrap.scrollWidth - wrap.clientWidth) <= 4) return;
+          isDown = true; startX = evt.clientX; startScrollLeft = wrap.scrollLeft;
+          wrap.classList.add('dragging');
+        });
+        window.addEventListener('pointermove', evt => { if (!isDown) return; wrap.scrollLeft = startScrollLeft - (evt.clientX - startX); });
+        const stopDrag = () => { isDown = false; wrap.classList.remove('dragging'); };
+        window.addEventListener('pointerup', stopDrag);
+        wrap.addEventListener('pointerleave', stopDrag);
+        wrap.addEventListener('wheel', evt => {
+          if (!evt.shiftKey) return;
+          if ((wrap.scrollWidth - wrap.clientWidth) <= 4) return;
+          evt.preventDefault();
+          wrap.scrollLeft += Math.abs(evt.deltaX) > Math.abs(evt.deltaY) ? evt.deltaX : evt.deltaY;
+        }, { passive: false });
+        wrap.dataset.execInteractiveBound = '1';
+      }
+
+      if (wrap) {
+        if (scrollNeeded) wrap.scrollLeft = Math.max(wrap.scrollWidth - wrap.clientWidth, 0);
+        else wrap.scrollLeft = 0;
+      }
+    }
+
+    function renderExecutiveResources(snapshots) {
+      if (els.executiveManpowerBody) {
+        els.executiveManpowerBody.innerHTML = snapshots.map(snapshot => {
+          const manpower = snapshot.manpower;
+          return `
+            <tr>
+              <td>${escapeHtml(snapshot.project)}</td>
+              <td>${manpower.total}</td>
+              <td>${manpower.leadership}</td>
+              <td>${manpower.operators}</td>
+              <td>${manpower.support}</td>
+              <td>${manpower.date ? formatDateFullLabel(manpower.date) : '—'}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      if (els.executiveEquipmentBody) {
+        els.executiveEquipmentBody.innerHTML = snapshots.map(snapshot => {
+          const equipment = snapshot.equipment;
+          return `
+            <tr>
+              <td>${escapeHtml(snapshot.project)}</td>
+              <td>${equipment.rigs}</td>
+              <td>${equipment.cranes}</td>
+              <td>${equipment.others}</td>
+              <td>${equipment.lm7d > 0 ? equipment.lm7d.toFixed(1) : '—'}</td>
+              <td>${equipment.lmPerRigPerDay > 0 ? equipment.lmPerRigPerDay.toFixed(1) : '—'}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    function broadcastExecutiveMapContext() {
+      if (!els.executiveMapFrame?.contentWindow || !currentUser) return;
+      els.executiveMapFrame.contentWindow.postMessage({
+        type: 'AUTH_CONTEXT_UPDATED',
+        payload: {
+          project: executiveMapProject,
+          plot: '',
+          overviewDateMode,
+          type: currentUser.type,
+          name: currentUser.name,
+          username: currentUser.username,
+          email: currentUser.email
+        }
+      }, window.location.origin);
+    }
+
+    function triggerExecutiveMapFocus() {
+      if (!els.executiveMapFrame?.contentWindow) return;
+      els.executiveMapFrame.contentWindow.postMessage({
+        type: 'MAP_FOCUS_ANIMATE'
+      }, window.location.origin);
+    }
+
+    function bindExecutiveMapFrameSync() {
+      if (!els.executiveMapFrame || els.executiveMapFrame.dataset.syncBound === 'true') return;
+      els.executiveMapFrame.addEventListener('load', () => {
+        broadcastExecutiveMapContext();
+        setTimeout(() => triggerExecutiveMapFocus(), 80);
+      });
+      els.executiveMapFrame.dataset.syncBound = 'true';
+    }
+
+    function ensureExecutiveMapLoaded() {
+      if (!els.executiveMapFrame) return;
+      if (!els.executiveMapFrame.getAttribute('src')) {
+        els.executiveMapFrame.setAttribute('src', els.executiveMapFrame.dataset.src || 'map.html');
+      }
+    }
+
+    function renderExecutivePage() {
+      syncExecutiveSelectors();
+      if (executiveTrendProject === 'All Projects') {
+        executiveActivityMode = 'piles';
+        executiveChartMetric = 'piles';
+        executiveChartMode = 'daily';
+        executiveChartGranularity = 'day';
+      }
+      const snapshots = getCombinedProjectList().filter(Boolean).map(project => buildExecutiveProjectSnapshot(project));
+      renderExecutiveMatrix(snapshots);
+      renderExecutiveTrendChart();
+      renderExecutiveResources(snapshots);
+      if (executiveView === 'map') {
+        ensureExecutiveMapLoaded();
+        broadcastExecutiveMapContext();
+        window.setTimeout(() => triggerExecutiveMapFocus(), 80);
+      }
+    }
+
     function setActivePage(page) {
       if (!currentUser) return;
       if (!canAccessPage(page)) {
@@ -1664,6 +2411,8 @@
       if (dateModeToggle) {
         dateModeToggle.style.display = showDateModeToggle ? 'inline-flex' : 'none';
       }
+
+      updateUserContextUi();
 
       els.navButtons.forEach(btn => {
         btn.classList.toggle('active', btn.dataset.page === page);
@@ -4641,6 +5390,41 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
       return rows;
     }
 
+    function getPortfolioManpowerRows(project = 'All Projects') {
+      const rawProject = normalizeText(project || 'All Projects');
+      const targetProject = isAllProjectsValue(rawProject) ? '' : rawProject;
+      const filtered = manpowerRows.filter(row => {
+        const projectMatch = !targetProject || normalizeText(row?.project) === targetProject;
+        return projectMatch;
+      });
+
+      const latestByDate = new Map();
+      filtered.forEach(row => {
+        const dateKey = normalizeDateString(row?.date);
+        if (!dateKey) return;
+        latestByDate.set(dateKey, row);
+      });
+
+      return Array.from(latestByDate.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([dateKey, row]) => {
+          const item = {
+            date: dateKey,
+            pm: getManpowerCount(row, ['projectmanager', 'project manager']),
+            se: getManpowerCount(row, ['siteengineer', 'site engineer', 'siteenginner']),
+            foreman: getManpowerCount(row, ['foreman']),
+            op: getManpowerCount(row, ['operator', 'operators']),
+            vb: getManpowerCount(row, ['vibro operator', 'vibrooperator', 'vibro_operator']),
+            rig: getManpowerCount(row, ['riggers', 'rigger']),
+            we: getManpowerCount(row, ['welder', 'welders']),
+            me: getManpowerCount(row, ['mechanic', 'mechanics']),
+            hl: getManpowerCount(row, ['helpers', 'helper'])
+          };
+          item.total = item.pm + item.se + item.foreman + item.op + item.vb + item.rig + item.we + item.me + item.hl;
+          return item;
+        });
+    }
+
     function renderManpowerHistogram(rows) {
       const svg = els.manpowerHistSvg;
       if (!svg) return;
@@ -5582,6 +6366,51 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         const index = Number(el.getAttribute('data-pie-index'));
         el.addEventListener('mousemove', evt => showForIndex(evt, index));
         el.addEventListener('mouseleave', hideCompanyAnalyticsTooltip);
+      });
+    }
+
+    function getPortfolioEquipmentDateRows(project = 'All Projects') {
+      const rawProject = normalizeText(project || 'All Projects');
+      const targetProjectToken = isAllProjectsValue(rawProject) ? '' : getCompanyProjectToken(rawProject);
+      const normalizedProjectRows = dailyReportEquipmentRows
+        .map(sanitizeDailyReportEquipmentRow)
+        .filter(item => !targetProjectToken || getCompanyProjectToken(item.projectRaw || item.project) === targetProjectToken);
+
+      const grouped = new Map();
+      normalizedProjectRows.forEach(item => {
+        if (!item.date) return;
+        if (!grouped.has(item.date)) grouped.set(item.date, []);
+        grouped.get(item.date).push(item);
+      });
+
+      return Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([dateKey, items]) => {
+        const deduped = items.reduce((acc, item) => {
+          const typeKey = normalizeText(item.type).toLowerCase();
+          const labelKey = normalizeText(item.label);
+          const dedupeKey = `${typeKey}::${labelKey}`;
+          if (acc.some(existing => existing._dedupeKey === dedupeKey)) return acc;
+          const ownership = normalizeText(item.contractor).toLowerCase() === 'apfc' ? 'Owned' : 'Rented';
+          const category = typeKey === 'rig' || typeKey === 'crane' ? typeKey : 'other';
+          acc.push({
+            _dedupeKey: dedupeKey,
+            ownership,
+            category,
+            type: item.type,
+            label: item.label || typeKey
+          });
+          return acc;
+        }, []);
+        const rigs = deduped.filter(item => item.category === 'rig').length;
+        const cranes = deduped.filter(item => item.category === 'crane').length;
+        const others = deduped.filter(item => item.category === 'other').length;
+        return {
+          date: dateKey,
+          rigs,
+          cranes,
+          others,
+          total: rigs + cranes + others,
+          activeItems: deduped.map(({ _dedupeKey, ...item }) => item)
+        };
       });
     }
 
@@ -7710,4 +8539,5 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
     });
   }
 })();
+
 

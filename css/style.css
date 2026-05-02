@@ -5275,3 +5275,580 @@ body.auth-locked .auth-shell {
     grid-template-columns: 1fr;
   }
 }
+
+.executive-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.executive-panel {
+  min-height: calc(100vh - 170px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.executive-header {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.executive-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.executive-select {
+  min-width: 180px;
+}
+
+.executive-view {
+  display: none;
+}
+
+.executive-view.active {
+  display: block;
+}
+
+.executive-overview-grid,
+.executive-resources-grid {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 16px;
+}
+
+.executive-matrix-card {
+  grid-column: 1 / -1;
+}
+
+.executive-card {
+  background: linear-gradient(180deg, rgba(21, 28, 34, 0.92), rgba(12, 16, 20, 0.96));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 24px;
+  box-shadow: 0 18px 44px rgba(0,0,0,0.18);
+  overflow: hidden;
+}
+
+.executive-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.executive-card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #f4f7fb;
+}
+
+.executive-card-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: rgba(244,247,251,0.62);
+}
+
+.executive-matrix-wrap,
+.executive-resource-table-wrap {
+  overflow: auto;
+}
+
+.executive-matrix-table,
+.executive-resource-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1080px;
+}
+
+.executive-matrix-table th,
+.executive-matrix-table td,
+.executive-resource-table th,
+.executive-resource-table td {
+  padding: 9px 13px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.executive-matrix-table th,
+.executive-resource-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(10, 14, 18, 0.98);
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(244,247,251,0.88);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.executive-matrix-table td,
+.executive-resource-table td {
+  font-size: 13px;
+  color: rgba(244,247,251,0.92);
+}
+
+.executive-project-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.executive-project-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(244,247,251,0.56);
+}
+
+.executive-split {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.executive-split-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.executive-split-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(244,247,251,0.64);
+}
+
+.executive-split-value {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  text-align: right;
+}
+
+.executive-progress-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+
+.executive-progress-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.executive-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.executive-progress-label {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.executive-progress-meta {
+  font-size: 12px;
+  color: rgba(244,247,251,0.66);
+}
+
+.executive-progress-track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+.executive-progress-fill-piles,
+.executive-progress-fill-kingposts {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+}
+
+.executive-progress-fill-piles {
+  left: 0;
+  background: linear-gradient(90deg, rgba(110,231,183,0.96), rgba(110,231,183,0.56));
+}
+
+.executive-progress-fill-kingposts {
+  right: 0;
+  background: linear-gradient(90deg, rgba(96,165,250,0.52), rgba(96,165,250,0.92));
+}
+
+.executive-trend-wrap {
+  min-height: 300px;
+  height: 300px;
+  padding: 4px 18px 10px;
+}
+
+.executive-trend-svg {
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  display: block;
+}
+
+.executive-map-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0 12px;
+}
+
+.executive-map-shell .map-frame {
+  min-height: 72vh;
+  height: 72vh;
+}
+
+/* ── Executive: fixed-height one-page panel ── */
+.executive-panel {
+  height: calc(100vh - 178px);
+  min-height: 560px;
+  overflow: hidden;
+  gap: 0;
+}
+
+.executive-header {
+  flex-shrink: 0;
+}
+
+.executive-view {
+  display: none;
+}
+
+.executive-view.active {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+#executiveOverviewView.active,
+#executiveResourcesView.active {
+  padding: 14px;
+}
+
+/* ── Overview: side-by-side grid ── */
+.executive-overview-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.executive-matrix-card {
+  grid-column: auto;
+}
+
+.executive-trend-card {
+  overflow: hidden;
+}
+
+.executive-matrix-wrap {
+  overflow: auto;
+}
+
+.executive-matrix-table {
+  min-width: 820px;
+}
+
+/* ── Activity rows (no cards — clean inline rows) ── */
+.exec-act-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.exec-act-block {
+  border-radius: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.exec-act-block--piles {
+  border-color: rgba(110, 231, 183, 0.18);
+  background: linear-gradient(180deg, rgba(110, 231, 183, 0.09), rgba(110, 231, 183, 0.035));
+}
+
+.exec-act-block--king {
+  border-color: rgba(96, 165, 250, 0.18);
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.09), rgba(96, 165, 250, 0.035));
+}
+
+.exec-act-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.exec-act-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(244, 247, 251, 0.64);
+}
+
+.exec-act-title--piles {
+  color: rgba(110, 231, 183, 0.92);
+}
+
+.exec-act-title--king {
+  color: rgba(125, 198, 255, 0.92);
+}
+
+/* ── Progress column ── */
+.exec-progress-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.exec-progress-nums {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  line-height: 1;
+}
+
+.exec-executed {
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.4px;
+}
+
+.exec-slash {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(244, 247, 251, 0.28);
+  margin: 0 1px;
+}
+
+.exec-total {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(244, 247, 251, 0.46);
+}
+
+.exec-progress-pct {
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(244, 247, 251, 0.56);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.exec-progress-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.exec-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 600ms cubic-bezier(.22,.61,.36,1);
+}
+
+.exec-progress-fill--piles { background: linear-gradient(90deg, #6ee7b7, #34d399); }
+.exec-progress-fill--king  { background: linear-gradient(90deg, #60a5fa, #3b82f6); }
+
+/* ── Yesterday / AVG key-value ── */
+.exec-kv {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px;
+  line-height: 1.35;
+}
+
+.exec-kv-num {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.2px;
+}
+
+.exec-kv-unit {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(244, 247, 251, 0.46);
+  letter-spacing: 0.04em;
+}
+
+.exec-kv-sep {
+  font-size: 11px;
+  color: rgba(244, 247, 251, 0.2);
+  margin: 0 1px;
+}
+
+/* ── ETA column ── */
+.exec-eta-date {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.exec-eta-months {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(244, 247, 251, 0.58);
+  margin-top: 4px;
+}
+
+/* ── Scalar cells ── */
+.exec-scalar {
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.exec-unit {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(244, 247, 251, 0.46);
+  letter-spacing: 0.04em;
+  line-height: 1.45;
+}
+
+.exec-scalar-cell {
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+  vertical-align: middle;
+}
+
+/* ── Trend chart project selector ── */
+.exec-trend-selector-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px 4px;
+  flex-shrink: 0;
+}
+
+.executive-chart-toolbar {
+  flex-shrink: 0;
+  padding: 8px 18px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.exec-trend-select {
+  min-width: 180px;
+}
+
+/* ── Chart shell + card fill height ── */
+.executive-chart-shell {
+  display: flex;
+  flex-direction: column;
+}
+
+.executive-chart-card {
+  padding: 8px 18px 0;
+}
+
+.executive-trend-wrap {
+  min-height: 240px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 18px 10px;
+  cursor: default;
+  position: relative;
+}
+
+.executive-trend-wrap.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.executive-trend-svg {
+  display: block;
+  overflow: visible;
+}
+
+/* ── Resources view: fill height, internal scroll ── */
+.executive-resources-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  align-items: start;
+}
+
+.executive-resources-grid .executive-card {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.executive-resource-table-wrap {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* ── Map view: fill height ── */
+.executive-map-toolbar {
+  flex-shrink: 0;
+  padding: 0 0 10px;
+}
+
+.executive-map-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.executive-map-shell .map-frame-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+.executive-map-shell .map-frame {
+  height: 100%;
+  min-height: 0;
+}
+
+@media (max-width: 1260px) {
+  .executive-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .executive-resources-grid {
+    grid-template-columns: 1fr;
+  }
+  .executive-panel {
+    height: auto;
+    min-height: 0;
+  }
+}

@@ -2690,6 +2690,7 @@
         this.hoveredId = null;
         this.isSatelliteMode = false;
         this.isThreeDimensional = false;
+        this.pendingBuild = false;
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         this.centerMerc = mapboxgl.MercatorCoordinate.fromLngLat(SITE_CENTER, 0);
@@ -2728,6 +2729,11 @@
       }
 
       buildPiles() {
+        if (!this.rootGroup) {
+          this.pendingBuild = true;
+          return;
+        }
+        this.pendingBuild = false;
         while (this.rootGroup.children.length) {
           const child = this.rootGroup.children.pop();
           disposeThreeNode(child);

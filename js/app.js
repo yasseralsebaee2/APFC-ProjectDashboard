@@ -6656,7 +6656,7 @@ function renderProductionMetricChart(project, key, forceAnimate = false) {
         ...rows.map(row => [
           row.employeeNumber || '-',
           row.employeeName || '-',
-          row.designation || '-',
+          row.subDesignation || row.designation || '-',
           row.project || '-',
           row.shift || '-',
           row.campNumber || '-',

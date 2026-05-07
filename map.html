@@ -950,7 +950,8 @@
     const DATA_WORKER_API_KEY = 'apfc_F7k9LmQ2xR8vT5ZpA1sD6wN3YtE4uH0JcB9KqX';
     const DATA_FILE_KEYS = {
       piles: 'piles',
-      kingpost: 'kingpost'
+      kingpost: 'kingpost',
+      anchors: 'anchors'
     };
     const BASE_STYLE_URL = 'mapbox://styles/yasseralsebaee/cmmfw9dvc00b001ra2h2f5vrw';
     const SAT_STYLE_OBJECT = {
@@ -1102,8 +1103,10 @@
     let chartInteractivePoints = [];
     let allPiles = [];
     let allKingPosts = [];
+    let allAnchors = [];
     let pileRecords = [];
     let kingPostRecords = [];
+    let anchorRecords = [];
     let chartData = [];
     let SITE_CENTER = DEFAULT_SITE_CENTER;
     let pileLayer = null;
@@ -1764,6 +1767,37 @@
           readyToInstall: stateKey === 'ready',
           stateKey,
           rotationZ: getKingPostRotationRadians(row)
+        };
+      }).filter(Boolean);
+    }
+
+    function parseAngleDeg(value) {
+      const n = parseNumber(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function buildAnchorRecords(rows) {
+      return (Array.isArray(rows) ? rows : []).map((row, index) => {
+        const lngLat = dltmToWgs84(row.design_x, row.design_y);
+        if (!lngLat) return null;
+        const id = normalizeId(row.anchorid ?? row.anchorId ?? row.id);
+        const freeLength = Math.max(0, parseNumber(row.design_freelength ?? row.design_freeLength));
+        const bondLength = Math.max(0, parseNumber(row.design_bondinglength ?? row.design_bondingLength));
+        const horizontalDeg = parseAngleDeg(row.design_horizontalangle ?? row.design_horizontalAngle);
+        const verticalDeg = parseAngleDeg(row.design_verticalangle ?? row.design_verticalAngle);
+        const strands = Math.max(0, parseInt(row.design_numberofstrands ?? row.design_numberOfStrands ?? 0, 10) || 0);
+        return {
+          row,
+          id,
+          recordKey: buildMapRecordKey('anchor', row, id, index),
+          elementType: 'anchor',
+          lngLat,
+          topZ: -0.02,
+          freeLengthM: freeLength,
+          bondLengthM: bondLength,
+          horizontalDeg,
+          verticalDeg,
+          strands
         };
       }).filter(Boolean);
     }
@@ -3501,6 +3535,7 @@
         this.pileInstanceMeshes = [];
         this.kingPostMeshes = [];
         this.kingPostInstanceMeshes = [];
+        this.anchorInstanceMeshes = [];
         this.testIndicators = [];
         this.highlightOverlayMesh = null;
         this.hoverOverlayMesh = null;
@@ -3561,6 +3596,7 @@
         this.pileInstanceMeshes = [];
         this.kingPostMeshes = [];
         this.kingPostInstanceMeshes = [];
+        this.anchorInstanceMeshes = [];
         this.testIndicators = [];
         this.highlightOverlayMesh = null;
         this.hoverOverlayMesh = null;
@@ -3691,6 +3727,168 @@
           this.kingPostInstanceMeshes.push(instancedMesh);
           this.meshes.push(instancedMesh);
         });
+
+        // Ground anchors (free + bonding length), map-only visualization.
+        const scope = getActiveScope();
+        const scopedAnchors = Array.isArray(anchorRecords)
+          ? anchorRecords.filter(rec => matchesScope(rec.row, scope))
+          : [];
+        const anchorSet = scopedAnchors.length ? scopedAnchors : (Array.isArray(anchorRecords) ? anchorRecords : []);
+        if (Array.isArray(anchorSet) && anchorSet.length) {
+          const unitGeom = new THREE.CylinderGeometry(1, 1, 1, 18, 1, false);
+          unitGeom.rotateX(Math.PI / 2); // align along local +Z
+
+          const freeMat = new THREE.MeshPhongMaterial({
+            // Brighter cyan so it reads on satellite imagery.
+            color: 0xcdf7ff,
+            transparent: true,
+            opacity: 0.76,
+            shininess: 120,
+            specular: 0xffffff,
+            depthTest: true,
+            depthWrite: true
+          });
+          freeMat.emissive = new THREE.Color(0x2aa7b8);
+          freeMat.emissiveIntensity = 0.28;
+
+          const freeGlowMat = new THREE.MeshBasicMaterial({
+            color: 0xe9fdff,
+            transparent: true,
+            opacity: this.isSatelliteMode ? 0.24 : 0.14,
+            depthTest: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+          });
+
+          const bondMat = new THREE.MeshPhongMaterial({
+            // Light neutral so it reads on satellite imagery.
+            color: 0xe4eaf2,
+            transparent: true,
+            opacity: 0.86,
+            shininess: 130,
+            specular: 0xffffff,
+            depthTest: true,
+            depthWrite: true
+          });
+          bondMat.emissive = new THREE.Color(0x5b7896);
+          bondMat.emissiveIntensity = 0.22;
+
+          // Subtle "readability glow" for satellite: additive, slightly larger than the bond body.
+          const bondGlowMat = new THREE.MeshBasicMaterial({
+            color: 0xf1f6ff,
+            transparent: true,
+            opacity: this.isSatelliteMode ? 0.22 : 0.14,
+            depthTest: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+          });
+
+          const freeMesh = new THREE.InstancedMesh(unitGeom, freeMat, anchorSet.length);
+          freeMesh.userData.elementType = 'anchor-free-instanced';
+          freeMesh.frustumCulled = false;
+          freeMesh.renderOrder = 997;
+
+          const freeGlowMesh = new THREE.InstancedMesh(unitGeom, freeGlowMat, anchorSet.length);
+          freeGlowMesh.userData.elementType = 'anchor-free-glow-instanced';
+          freeGlowMesh.frustumCulled = false;
+          freeGlowMesh.renderOrder = 996;
+
+          const bondMesh = new THREE.InstancedMesh(unitGeom, bondMat, anchorSet.length);
+          bondMesh.userData.elementType = 'anchor-bond-instanced';
+          bondMesh.frustumCulled = false;
+          bondMesh.renderOrder = 994;
+
+          const bondGlowMesh = new THREE.InstancedMesh(unitGeom, bondGlowMat, anchorSet.length);
+          bondGlowMesh.userData.elementType = 'anchor-bond-glow-instanced';
+          bondGlowMesh.frustumCulled = false;
+          bondGlowMesh.renderOrder = 993;
+
+          const baseAxis = new THREE.Vector3(0, 0, 1);
+          let freeCount = 0;
+          let bondCount = 0;
+          let bondGlowCount = 0;
+          let freeGlowCount = 0;
+          anchorSet.forEach((record, index) => {
+            const merc = mapboxgl.MercatorCoordinate.fromLngLat(record.lngLat, 0);
+            const localX = (merc.x - this.centerMerc.x) / this.modelTransform.scale;
+            const localY = (merc.y - this.centerMerc.y) / this.modelTransform.scale;
+
+            // Angles:
+            // - horizontalDeg: plan azimuth (clockwise from North) to rotate the anchor direction
+            // - verticalDeg: inclination down from horizontal (0 = horizontal, 90 = vertical down)
+            const bearingRad = (Number(record.horizontalDeg) || 0) * (Math.PI / 180);
+            const tiltRad = (Number(record.verticalDeg) || 0) * (Math.PI / 180);
+            const horiz = Math.cos(tiltRad);
+            // Local axes: +X east, +Y north, +Z up. Anchor goes "into ground" => negative Z.
+            const dir = new THREE.Vector3(
+              Math.sin(bearingRad) * horiz,
+              Math.cos(bearingRad) * horiz,
+              -Math.sin(tiltRad)
+            );
+            if (dir.lengthSq() < 1e-10) dir.set(0, 0, -1);
+            dir.normalize();
+            const quat = new THREE.Quaternion().setFromUnitVectors(baseAxis, dir);
+
+            const startZ = Number.isFinite(Number(record.topZ)) ? Number(record.topZ) : -0.02;
+            const start = new THREE.Vector3(localX, localY, startZ);
+
+            const freeLen = Math.max(0, Number(record.freeLengthM) || 0);
+            const bondLen = Math.max(0, Number(record.bondLengthM) || 0);
+
+            const strands = Math.max(0, Number(record.strands) || 0);
+            // Make anchors visually readable (both free + bond). Slightly scale with strand count.
+            const radius = Math.max(0.11, 0.095 + Math.min(10, strands) * 0.008);
+
+            if (freeLen > 0.05) {
+              const center = start.clone().add(dir.clone().multiplyScalar(freeLen / 2));
+              tempPosition.copy(center);
+              tempScale.set(radius, radius, freeLen);
+              tempQuaternion.copy(quat);
+              tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
+              freeMesh.setMatrixAt(freeCount, tempMatrix);
+              freeCount += 1;
+
+              tempScale.set(radius * 1.55, radius * 1.55, freeLen);
+              tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
+              freeGlowMesh.setMatrixAt(freeGlowCount, tempMatrix);
+              freeGlowCount += 1;
+            }
+
+            if (bondLen > 0.05) {
+              const center = start.clone().add(dir.clone().multiplyScalar(freeLen + bondLen / 2));
+              tempPosition.copy(center);
+              // Make bonding length visually heavier than free length.
+              tempScale.set(radius * 2.0, radius * 2.0, bondLen);
+              tempQuaternion.copy(quat);
+              tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
+              bondMesh.setMatrixAt(bondCount, tempMatrix);
+              bondCount += 1;
+
+              tempScale.set(radius * 2.28, radius * 2.28, bondLen);
+              tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
+              bondGlowMesh.setMatrixAt(bondGlowCount, tempMatrix);
+              bondGlowCount += 1;
+            }
+
+            record._local3d = { x: localX, y: localY, topZ: startZ };
+          });
+
+          freeMesh.count = freeCount;
+          bondMesh.count = bondCount;
+          bondGlowMesh.count = bondGlowCount;
+          freeGlowMesh.count = freeGlowCount;
+          freeMesh.instanceMatrix.needsUpdate = true;
+          bondMesh.instanceMatrix.needsUpdate = true;
+          bondGlowMesh.instanceMatrix.needsUpdate = true;
+          freeGlowMesh.instanceMatrix.needsUpdate = true;
+
+          // Order: glows first, then solids.
+          this.rootGroup.add(bondGlowMesh);
+          this.rootGroup.add(bondMesh);
+          this.rootGroup.add(freeGlowMesh);
+          this.rootGroup.add(freeMesh);
+          this.anchorInstanceMeshes.push(bondGlowMesh, bondMesh, freeGlowMesh, freeMesh);
+        }
         this.syncPileOverlayMeshes();
         this.applySatelliteMode(this.isSatelliteMode);
       }
@@ -4188,13 +4386,25 @@
           }
         })()
       ]);
+
+      // Optional anchors feed (map-only for now).
+      let anchorRows = [];
+      try {
+        const anchorsData = await fetchWorkerJson(DATA_FILE_KEYS.anchors);
+        anchorRows = Array.isArray(anchorsData) ? anchorsData : (anchorsData?.rows || anchorsData?.data || []);
+      } catch (err) {
+        console.warn('Anchor source load skipped:', err);
+        anchorRows = [];
+      }
       const rawPiles = extractPileList(pileData);
       allPiles = rawPiles;
       allKingPosts = kingPostRows;
+      allAnchors = anchorRows;
       pileRecords = buildPileRecords(allPiles);
       kingPostRecords = buildKingPostRecords(allKingPosts);
+      anchorRecords = buildAnchorRecords(allAnchors);
       chartData = aggregateDailyData(allPiles);
-      SITE_CENTER = getRecordCentroid([...pileRecords, ...kingPostRecords]);
+      SITE_CENTER = getRecordCentroid([...pileRecords, ...kingPostRecords, ...anchorRecords]);
       map.setCenter(SITE_CENTER);
       if (!pileLayer) {
         pileLayer = new ThreePileLayer('threejs-piles');
